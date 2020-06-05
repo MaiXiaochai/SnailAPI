@@ -39,9 +39,9 @@ RESULT_SUCCESS = "Y"    # YES       运行成功
 RESULT_FAILED = "N"     # NO        运行失败
 
 # TODO: 任务修改操作,用于任务修改的记录
-STATUS_CREATED = "C"    # CREATE    创建
-STATUS_UPDATED = "U"    # UPDATE    修改
-STATUS_DELETED = "D"    # DELETE    删除
+ACTION_CREATED = "C"    # CREATE    创建
+ACTION_UPDATED = "U"    # UPDATE    修改
+ACTION_DELETED = "D"    # DELETE    删除
 
 
 # TODO: 自定义错误字典，API使用, 暂时还没有自定义错误

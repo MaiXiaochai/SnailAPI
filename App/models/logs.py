@@ -34,4 +34,4 @@ class ModLog(BaseModel):
     created_by = Column(String, nullable=False, comment="创建人")
     category = Column(String, nullable=False, comment="所属业务")
     desc = Column(String, nullable=False, comment="任务描述")
-    mod_status = Column(String(1), nullable=False, index=True, comment="修改动作,C:create, U:update, D:delete")
+    action = Column(String(1), nullable=False, index=True, comment="修改动作,C:create, U:update, D:delete")

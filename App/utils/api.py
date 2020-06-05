@@ -8,23 +8,34 @@
 @Created on : 2020/5/22 15:47
 --------------------------------------
 """
+from App.setting import ACTION_CREATED, ACTION_UPDATED, ACTION_DELETED
 
 
-def save_mod_log(action, kwargs, model):
+def save_mod_log(action, args, model):
     """
     TODO: [2020-06-05]
     保存job修改记录,每次CRUD操作都会记录。
     :param action:          str         job信息修改的操作名称
-    :param kwargs:          dict        job 信息
+    :param args:            dict        job 信息
     :param model:           Model       mod log 数据模型
     """
     t_mod = model()
 
+    if action == ACTION_CREATED:
+        set_model_value(t_mod, args)
+        t_mod.action = ACTION_CREATED
+        t_mod.insert_save()
 
-def save_job_data(name, args, model):
+    elif action == ACTION_UPDATED:
+        pass
+
+    elif action == ACTION_DELETED:
+        pass
+
+
+def save_job_data(args, model):
     """
     保存job数据到数据库
-    :param name:        str         job name
     :param args:        Parse.args  job数据对象
     :param model:       Model       job数据库模型
     :return:            Boolean     True:成功，False:失败
@@ -34,9 +45,6 @@ def save_job_data(name, args, model):
 
     # 给model job_data对象的字段赋值
     set_model_value(t_data, args)
-
-    # 上一行赋值时，args没有 job_name属性,所以job中没有赋值该属性，这里单独赋值
-    setattr(t_data, "job_name", name)
 
     return t_data.insert_save()
 

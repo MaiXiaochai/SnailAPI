@@ -141,11 +141,17 @@ class JobsResource(Resource):
                 # 将 job添加到调度
                 job_handler(scheduler, sched_dict)
 
+                full_data = {}
+                set_model_value(full_data, parser_jobs)
+                setattr(full_data, "job_name", job_name)
+
                 # job 数据保存到数据库
-                save_job_data(job_name, args, JobData)
+                save_job_data(full_data, JobData)
 
                 # 添加job name 到job status 表
                 save_job_status(job_name, JobStatus)
+
+                # 添加job 修改日志
 
             else:
                 status = HTTP_CONFLICT

@@ -1,9 +1,17 @@
 [[source]]
 name = "pypi"
-url = "http://mirrors.aliyun.com/pypi/simple/ "
+url = "http://mirrors.aliyun.com/pypi/simple/"
 verify_ssl = true
 
 [dev-packages]
+flask-sqlalchemy = "*"
+flask-migrate = "*"
+flask-session = "*"
+flask-caching = "*"
+flask-apscheduler = "*"
+flask = "*"
+flask-restful = "*"
+psycopg2 = "*"
 
 [packages]
 
