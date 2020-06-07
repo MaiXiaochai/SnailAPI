@@ -29,8 +29,8 @@ def log_start(job_name, cmd, model_status, model_log):
     :return:                int         返回log id，成功 > 0, 失败 -1
 
     [2020-05-29]
-    为什么用 model class 而不是 model instance？
-    考虑到有的任务运行时间很长，model instance可能会占用会话资源。
+    为什么用 model_data class 而不是 model_data instance？
+    考虑到有的任务运行时间很长，model_data instance可能会占用会话资源。
     如果有很多运行时间很长的任务（如，刷新涉及多数据的物化视图），会给数据库带来负担，甚至会话失败。
     """
     status = STATUS_RUNNING
@@ -64,8 +64,8 @@ def log_end(status_id, log_id, return_code, stdout, stderr, model_status, model_
     :return:                Boolean     True：成功，False：失败
 
     [2020-05-29]
-    为什么用 model class 而不是 model instance？
-    考虑到有的任务运行时间很长，model instance可能会占用会话资源。
+    为什么用 model_data class 而不是 model_data instance？
+    考虑到有的任务运行时间很长，model_data instance可能会占用会话资源。
     如果有很多运行时间很长的任务（如，刷新涉及多数据的物化视图），会给数据库带来负担，甚至新建会话失败。
     """
     job_status = model_status.query.filter(model_status.id == status_id).first()

@@ -12,27 +12,41 @@
 # 请求返回状态码，status
 HTTP_OK = 200
 HTTP_CREATED_OK = 201
-HTTP_CREATED_FAILED = 500
-HTTP_EXECUATE_FAILED = 500
+HTTP_CREATED_FAILED = HTTP_EXECUTE_FAILED = 500
 HTTP_CONFLICT = 409             # 发生冲突
 HTTP_QUERY_ERROR = 400
 
 # 任务请求返回信息 msg
 MSG_JOB_CREATED_SUCCESS = "任务添加成功"
-MSG_JOB_CREATED_FAILED = "添加任务失败"
+MSG_JOB_CREATED_FAILED = "任务添加失败"
 MSG_JOB_EXISTED = "任务已存在"
-MSG_JOB_PAUSED = "任务已暂停"
-MSG_JOB_RESUMED = "任务已恢复"
-MSG_JOB_RUNNING = "任务正在运行"
-MSG_JOB_EXECUATE_FAIELD = "任务执行失败"
-MSG_JOB_QUERY_FAILED = "查询错误"
+MSG_JOB_PAUSED_SUCCESS = "任务暂停成功"
+MSG_JOB_PAUSED_FAILED = "任务暂停失败"
+MSG_JOB_RESUMED_SUCCESS = "任务恢复成功"
+MSG_JOB_RESUMED_FAILED = "任务恢复失败"
+MSG_JOB_RUNNING_SUCCESS = "任务运行成功"
+MSG_JOB_RUNNING_FAILED = "任务运行失败"
+MSG_JOB_MODIFIED_SUCCESS = "任务修改成功"
+MSG_JOB_MODIFIED_FAILED = "任务修改失败"
+MSG_JOB_EXECUTE_SUCCESS = "任务执行成功"
+MSG_JOB_EXECUTE_FAILED = "任务执行失败"
+MSG_JOB_DELETED_SUCCESS = "任务删除成功"
+MSG_JOB_DELETED_FAILED = "任务删除失败"
 MSG_JOB_QUERY_SUCCESS = "查询成功"
+MSG_JOB_QUERY_FAILED = "查询错误"
+
 
 # 任务运行状态
 STATUS_SLEEP = "S"      # SLEEP     任务已添加等待运行
 STATUS_RUNNING = "R"    # RUNNING   任务正在运行
 STATUS_PAUSED = "P"     # PAUSED    任务暂停(这里的暂停指的是没有下次运行时间)
 STATUS_OVER = "O"       # OVER      用于只执行一次的任务
+
+STATUS_DICT = {
+    "pause": STATUS_PAUSED,
+    "resume": STATUS_SLEEP,
+    "run": STATUS_RUNNING
+}
 
 # 任务运行结果
 RESULT_SUCCESS = "Y"    # YES       运行成功

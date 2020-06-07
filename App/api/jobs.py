@@ -17,15 +17,11 @@ from flask_restful.fields import Integer, String, DateTime, Nested, List
 
 from App.extensions import scheduler
 from App.models.jobs import JobData, JobStatus
-from App.utils import set_model_value, job_handler, get_next_time, save_job_data, save_job_status
-from App.setting import (HTTP_OK,
-                         HTTP_CREATED_OK,
-                         HTTP_CREATED_FAILED,
-                         MSG_JOB_CREATED_FAILED,
-                         MSG_JOB_CREATED_SUCCESS, MSG_JOB_PAUSED, MSG_JOB_RESUMED, MSG_JOB_RUNNING,
-                         HTTP_EXECUATE_FAILED, HTTP_CONFLICT, MSG_JOB_EXISTED, MSG_JOB_QUERY_SUCCESS,
-                         MSG_JOB_QUERY_FAILED, HTTP_QUERY_ERROR,
-                         )
+from App.models.logs import ModLog
+from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
+                       save_mod_log, cron_to_dict, up_job_data, del_job
+                       )
+from App.setting import *
 
 # Request 格式内容检测
 parser_jobs = RequestParser(trim=True)
@@ -34,6 +30,7 @@ parser_jobs = RequestParser(trim=True)
 parser_actions = parser_jobs.copy()
 parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
 
+parser_jobs.add_argument("action", type=str, help="请输入操作名称")
 parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", ],
                          help="请输入任务类型，暂时只支持cli，[cli|script|proc]")
 
@@ -152,6 +149,7 @@ class JobsResource(Resource):
                 save_job_status(job_name, JobStatus)
 
                 # 添加job 修改日志
+                save_mod_log(ACTION_CREATED, full_data, ModLog, JobData)
 
             else:
                 status = HTTP_CONFLICT
@@ -180,26 +178,31 @@ class JobsResource(Resource):
               2) 修改job全部数据和部分数据的API和 ModLog保存
         处理任务操作 暂停/恢复/立即执行
         """
-        args = parser_actions.parse_args()
-        action = args.get("action").lower()
+        args_actions = parser_actions.parse_args()
+        action = args_actions.get("action").lower()
 
-        status, msg, error = HTTP_OK, "", ""
+        msg, error = "", ""
 
         # 任务暂停
         if action == "pause":
             try:
-                scheduler.pause_job(job_name)
-                msg = MSG_JOB_PAUSED
+                scheduler.pause_job(job_name)  # 暂停
+                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
+                msg = MSG_JOB_PAUSED_SUCCESS
             except Exception as err:
                 error = str(err)
-
+                msg = MSG_JOB_PAUSED_FAILED
         # 任务恢复
         elif action == "resume":
             try:
-                scheduler.resume_job(job_name)
-                msg = MSG_JOB_RESUMED
+                scheduler.resume_job(job_name)  # 恢复
+                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
+                msg = MSG_JOB_RESUMED_SUCCESS
             except Exception as err:
                 error = str(err)
+                msg = MSG_JOB_RESUMED_FAILED
 
         # 任务立刻执行
         elif action == "run":
@@ -213,26 +216,94 @@ class JobsResource(Resource):
             """
             try:
                 scheduler.pause_job(job_name)
-                scheduler.run_job(job_name)
-                msg = MSG_JOB_RUNNING
+                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                scheduler.run_job(job_name)  # 运行
+                save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
+                msg = MSG_JOB_RUNNING_SUCCESS
 
             except Exception as err:
                 error = str(err)
+                msg = MSG_JOB_RUNNING_FAILED
 
             finally:
-                scheduler.resume_job(job_name)
+                run_status = RESULT_SUCCESS if not error else RESULT_FAILED
+                up_job_status(job_name, JobStatus, STATUS_SLEEP, run_status)  # 修改任务状态
+                scheduler.resume_job(job_name)  # 恢复
 
         # 修改除job_name外的全部信息
         elif action == "update":
+            args = parser_jobs.parse_args()
+            try:
+                if hasattr(args, "time_data"):
+                    # 字符串时间变字典时间
+                    trigger_data = cron_to_dict(CRON_KEYS, getattr(args, "time_data"))
+                    changes = {
+                        # 时间风格
+                        "trigger": getattr(args, "time_style")
+                    }
+                    changes.update(trigger_data)
 
-            pass
+                    # 修改任务时间
+                    scheduler.modify_job(job_name, changes)
 
-        status = HTTP_OK if not error else HTTP_EXECUATE_FAILED
+                full_data = {
+                    "job_name": job_name
+                }
+                set_model_value(full_data, args)
+                delattr(full_data, "action")
+
+                # 更新该job在JobData中的元数据
+                up_job_data(full_data, JobData)
+
+                # 将更改记录保存到日志
+                save_mod_log(ACTION_UPDATED, full_data, ModLog, JobData)
+                msg = MSG_JOB_MODIFIED_SUCCESS
+
+            except Exception as err:
+                error = str(err)
+                msg = MSG_JOB_MODIFIED_FAILED
+
+        status = HTTP_OK if not error else HTTP_EXECUTE_FAILED
         result = {
             "status": status,
             "msg": msg,
             "jobName": job_name,
             "action": action
+        }
+
+        # 如果出现错误，则在返回结果中加上报错内容
+        if error:
+            result["error"] = error
+
+        return jsonify(result)
+
+    def delete(self, job_name):
+        """
+        删除指定job
+        :param job_name:        str/list    要删除的job
+        """
+        error = ""
+        try:
+            args = {
+                "job_name": job_name
+            }
+            # 移除
+            scheduler.remove_job(job_name)
+
+            # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
+            save_mod_log(ACTION_DELETED, args, ModLog, JobData)
+
+            # 删除job状态和数据
+            del_job(job_name, JobStatus, JobData)
+        except Exception as err:
+            error = str(err)
+
+        status, msg = (HTTP_OK, MSG_JOB_DELETED_FAILED) if error else (HTTP_EXECUTE_FAILED, MSG_JOB_DELETED_SUCCESS)
+        result = {
+            "status": status,
+            "msg": msg,
+            "jobName": job_name,
+            "action": ACTION_DELETED
         }
 
         # 如果出现错误，则在返回结果中加上报错内容

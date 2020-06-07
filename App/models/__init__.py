@@ -33,6 +33,24 @@ class BaseModel(db.Model):
 
         return result
 
+    def delete(self, name, model):
+        """
+        按 job name 删除数据
+        session.delete & session.commit
+        :return:
+        :param name:        str         job name
+        :param model:       SubModel    子模型类
+        :return:            Boolean     True: 成功, False: 失败
+        """
+        result = True
+        try:
+            db.session.query(model).filter(model.job_name == name).delete()
+            db.session.commit()
+        except Exception as err:
+            result = False
+
+        return result
+
     def commit(self):
         """
         just session.commit()
