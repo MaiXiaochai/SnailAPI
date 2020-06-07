@@ -19,31 +19,33 @@ from App.extensions import scheduler
 from App.models.jobs import JobData, JobStatus
 from App.models.logs import ModLog
 from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
-                       save_mod_log, cron_to_dict, up_job_data, del_job
+                       save_mod_log, cron_to_dict, up_job_data, del_job, model_to_dict, get_bad_keys, BaseModel
                        )
 from App.setting import *
 
 # Request 格式内容检测
 parser_jobs = RequestParser(trim=True)
 
-# 继承一份，只包含 jobName字段
+# 继承一份，只包含 action字段
 parser_actions = parser_jobs.copy()
 parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
 
-parser_jobs.add_argument("action", type=str, help="请输入操作名称")
-parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", ],
-                         help="请输入任务类型，暂时只支持cli，[cli|script|proc]")
-
-parser_jobs.add_argument("jobCmd", dest="job_cmd", type=str, required=True, help="请输入任务运行命令, 如 python test.py")
 parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True, choices=["cron", ],
                          help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
-
 parser_jobs.add_argument("timeData", dest="time_data", type=str, required=True, help="请输入执行时间，如 0 5 * * *")
+
+parser_mod = parser_jobs.copy()
+parser_mod.add_argument("action", type=str, required=True, help="请输入操作名称")
+
+parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", ],
+                         help="请输入任务类型，暂时只支持cli，[cli|script|proc]")
+parser_jobs.add_argument("jobCmd", dest="job_cmd", type=str, required=True, help="请输入任务运行命令, 如 python test.py")
 parser_jobs.add_argument("createdBy", dest="created_by", type=str, required=True, help="请输入任务创建人姓名")
 parser_jobs.add_argument("category", dest="category", type=str, required=True,
                          help="请输入任务所属业务，[mes|erp|warranty|radar|pms|stopcard|...]")
 
 parser_jobs.add_argument("desc", dest="desc", type=str, required=True, help="请输入任务描述")
+
 
 job_fields = {
     "jobName": String(attribute="job_name"),
@@ -58,8 +60,7 @@ jobs_fields = {
     "status": Integer,
     "msg": String,
     "total": Integer,
-    "data": List(Nested(job_fields)),
-    "error": String(default="")
+    "data": List(Nested(job_fields))
 }
 
 
@@ -116,7 +117,7 @@ class JobsResource(Resource):
 
         if error:
             result["error"] = error
-
+            jobs_fields["error"] = String
         return marshal(result, jobs_fields)
 
     def post(self, job_name):
@@ -138,9 +139,10 @@ class JobsResource(Resource):
                 # 将 job添加到调度
                 job_handler(scheduler, sched_dict)
 
-                full_data = {}
-                set_model_value(full_data, parser_jobs)
-                setattr(full_data, "job_name", job_name)
+                full_data = {
+                    "job_name": job_name
+                }
+                set_model_value(full_data, args)
 
                 # job 数据保存到数据库
                 save_job_data(full_data, JobData)
@@ -167,7 +169,7 @@ class JobsResource(Resource):
         }
 
         # 如果出现错误，则在返回结果中加上报错内容
-        if not error:
+        if error:
             result["error"] = error
 
         return jsonify(result)
@@ -186,8 +188,10 @@ class JobsResource(Resource):
         # 任务暂停
         if action == "pause":
             try:
+                keys = get_bad_keys(BaseModel)
+                print("keys: ", keys)
                 scheduler.pause_job(job_name)  # 暂停
-                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
                 save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
                 msg = MSG_JOB_PAUSED_SUCCESS
             except Exception as err:
@@ -197,7 +201,7 @@ class JobsResource(Resource):
         elif action == "resume":
             try:
                 scheduler.resume_job(job_name)  # 恢复
-                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
                 save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
                 msg = MSG_JOB_RESUMED_SUCCESS
             except Exception as err:
@@ -216,7 +220,7 @@ class JobsResource(Resource):
             """
             try:
                 scheduler.pause_job(job_name)
-                up_job_status(job_name, JobStatus, getattr(STATUS_DICT, action))  # 修改任务状态
+                up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
                 scheduler.run_job(job_name)  # 运行
                 save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
                 msg = MSG_JOB_RUNNING_SUCCESS
@@ -232,14 +236,14 @@ class JobsResource(Resource):
 
         # 修改除job_name外的全部信息
         elif action == "update":
-            args = parser_jobs.parse_args()
+            args = parser_mod.parse_args()
             try:
                 if hasattr(args, "time_data"):
                     # 字符串时间变字典时间
-                    trigger_data = cron_to_dict(CRON_KEYS, getattr(args, "time_data"))
+                    trigger_data = cron_to_dict(CRON_KEYS, args.get("time_data"))
                     changes = {
                         # 时间风格
-                        "trigger": getattr(args, "time_style")
+                        "trigger": args.get("time_style")
                     }
                     changes.update(trigger_data)
 
@@ -250,7 +254,7 @@ class JobsResource(Resource):
                     "job_name": job_name
                 }
                 set_model_value(full_data, args)
-                delattr(full_data, "action")
+                full_data.pop("action")
 
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)

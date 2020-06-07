@@ -10,6 +10,7 @@
 """
 from sqlalchemy import func
 
+from App.models import BaseModel
 from App.setting import (ACTION_CREATED, ACTION_UPDATED, ACTION_DELETED, STATUS_PAUSED, STATUS_SLEEP, STATUS_RUNNING,
                          STATUS_DICT
                          )
@@ -24,9 +25,9 @@ def save_mod_log(action, args, model_mod, model_data):
     :param model_mod:       Model       job数据修改日志模型
     :param model_data:      Model       job数据模型
     """
-    action = action if len(action) == 1 else getattr(STATUS_DICT, action)
+    action = action if len(action) == 1 else STATUS_DICT.get(action)
     t_mod = model_mod()
-    name = getattr(args, "job_name")
+    name = args.get("job_name")
     executable = False
 
     if action == ACTION_CREATED:
@@ -34,10 +35,6 @@ def save_mod_log(action, args, model_mod, model_data):
         executable = True
 
     elif action == ACTION_UPDATED:
-        """
-        Q: 为什么用getattr而不是get？
-        A: args虽然规定为字典，在使用时难免遇到不是字典的情况，为了在后者出现时同样兼容。
-        """
         job_data = model_data.query.filter(model_data.job_name == name).first()
         if job_data:
             set_model_value(t_mod, job_data)
@@ -50,8 +47,10 @@ def save_mod_log(action, args, model_mod, model_data):
             set_model_value(t_mod, job_data)
             executable = True
 
-    if hasattr(t_mod, "status"):
-        delattr(t_mod, "status")
+    bad_keys = get_bad_keys(BaseModel) + ["status"]
+    for key in bad_keys:
+        if hasattr(t_mod, key):
+            delattr(t_mod, key)
 
     if executable:
         setattr(t_mod, "action", action)
@@ -79,11 +78,11 @@ def save_job_data(args, model_data):
 def up_job_data(args, model_data):
     """
     保存job数据到数据库
-    :param args:        Parse.args  job数据对象
+    :param args:        dict        job数据对象
     :param model_data:  Model       job数据库模型
     :return:            Boolean     True:成功，False:失败
     """
-    name = getattr(args, "job_name")
+    name = args.get("job_name")
     t_data = model_data.query.filter(model_data.job_name == name).first()
 
     # 给model job_data对象的字段赋值
@@ -137,21 +136,61 @@ def del_job(name, model_status, model_data):
     :param model_data:          JobData     job data模型
     """
     t_status, t_data = model_status, model_data
+    result = t_status.delete(name) and t_data.delete(name)
 
-    t_status.delete(name)
-    t_data.delete(name)
+    return result
 
 
-def set_model_value(model, args):
+def get_bad_keys(base_model):
+    """
+    获取BaseModel或者其它基础Model的字段名称
+    :param base_model:       BaseModel          基础数据模型
+    :return:                 list[str, str]     字段名称
+    """
+    result = []
+    for k in base_model.__dict__.keys():
+        if k.startswith("_") or callable(getattr(base_model, k)):
+            continue
+        result.append(k)
+
+    return result
+
+
+def model_to_dict(model: BaseModel):
+    """
+    获取模型对应的数据库字段
+    :param model:           BaseModel           数据库模型
+    :return:                dict(key, value)    该模型包含的字段
+    """
+    result = {}
+    for k in model.__dict__.keys():
+        if k.startswith("_"):
+            continue
+
+        v = getattr(model, k)
+        result[k] = v
+
+    return result
+
+
+def set_model_value(obj, args):
     """
     给 model_data 实例赋值,
     前提是args中解析的keys都包含在model的cols中
-    :param model:       model_data 实例
+    :param obj:         可以设置属性的对象
     :param args:        flask_restful.RequestParser解析出来的对象
     """
-    for item in args.items():
-        k, v = item
-        setattr(model, k, v)
+    if isinstance(args, BaseModel):
+        args = model_to_dict(args)
+
+    if isinstance(obj, dict):
+        for item in args.items():
+            k, v = item
+            obj[k] = v
+    else:
+        for item in args.items():
+            k, v = item
+            setattr(obj, k, v)
 
 
 def get_next_time(job_list):

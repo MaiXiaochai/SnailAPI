@@ -36,6 +36,7 @@ def log_start(job_name, cmd, model_status, model_log):
     status = STATUS_RUNNING
 
     job_status = model_status.query.filter(model_status.job_name == job_name).first()
+
     log_run = model_log()
 
     log_run.job_name = job_name
