@@ -12,33 +12,32 @@ from copy import deepcopy
 
 from flask import jsonify
 from flask_restful import Resource, marshal
-from flask_restful.reqparse import RequestParser
 from flask_restful.fields import Integer, String, DateTime, Nested, List
+from flask_restful.reqparse import RequestParser
 
 from App.extensions import scheduler
 from App.models.jobs import JobData, JobStatus
 from App.models.logs import ModLog
-from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
-                       save_mod_log, cron_to_dict, up_job_data, del_job, model_to_dict, get_bad_keys, BaseModel
-                       )
 from App.setting import *
+from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
+                       save_mod_log, cron_to_dict, up_job_data, del_job, rm_empty_kw
+                       )
 
-# Request 格式内容检测
+# Request 解析参数。自动去重
 parser_jobs = RequestParser(trim=True)
 
-# 继承一份，只包含 action字段
+# 继承parser_job
 parser_actions = parser_jobs.copy()
-parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
-
+# 继承 parser_job
+parser_mod = parser_jobs.copy()
+# ============================================== [ parser_job ] ==============================================
 parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True, choices=["cron", ],
                          help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
+
 parser_jobs.add_argument("timeData", dest="time_data", type=str, required=True, help="请输入执行时间，如 0 5 * * *")
-
-parser_mod = parser_jobs.copy()
-parser_mod.add_argument("action", type=str, required=True, help="请输入操作名称")
-
 parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", ],
                          help="请输入任务类型，暂时只支持cli，[cli|script|proc]")
+
 parser_jobs.add_argument("jobCmd", dest="job_cmd", type=str, required=True, help="请输入任务运行命令, 如 python test.py")
 parser_jobs.add_argument("createdBy", dest="created_by", type=str, required=True, help="请输入任务创建人姓名")
 parser_jobs.add_argument("category", dest="category", type=str, required=True,
@@ -46,7 +45,21 @@ parser_jobs.add_argument("category", dest="category", type=str, required=True,
 
 parser_jobs.add_argument("desc", dest="desc", type=str, required=True, help="请输入任务描述")
 
+# ============================================== [ parser_action ] ==============================================
+parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
 
+# ================================================ [ parser_mod ] ================================================
+# 5个参数 action, timeStyle, timeData, desc, category
+parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=["cron", ],
+                        help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
+
+parser_mod.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
+parser_mod.add_argument("category", dest="category", type=str,
+                        help="请输入任务所属业务，[mes|erp|warranty|radar|pms|stopcard|...]")
+
+parser_mod.add_argument("desc", dest="desc", type=str, help="请输入任务描述")
+
+# ============================================== [ parser done ] ==============================================
 job_fields = {
     "jobName": String(attribute="job_name"),
     "job_type": String(attribute="job_type"),
@@ -77,9 +90,9 @@ class JobsResource(Resource):
         """
         status, msg, error = HTTP_OK, MSG_JOB_QUERY_SUCCESS, ""
         job_name = str(job_name.strip())
-        jobs_data = []
-        result_data = []
+        jobs_data, result_data = [], []
 
+        # 部分job data
         if job_name.lower() != "all":
             if ";" not in job_name:
                 jobs_data = [scheduler.get_job(job_name)]
@@ -89,6 +102,7 @@ class JobsResource(Resource):
                 for name in job_names:
                     jobs_data.append(scheduler.get_job(name))
         else:
+            # 全部 job data
             jobs_data = scheduler.get_jobs()
 
         try:
@@ -188,8 +202,6 @@ class JobsResource(Resource):
         # 任务暂停
         if action == "pause":
             try:
-                keys = get_bad_keys(BaseModel)
-                print("keys: ", keys)
                 scheduler.pause_job(job_name)  # 暂停
                 up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
                 save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
@@ -218,9 +230,18 @@ class JobsResource(Resource):
                所以，为了防止这种情况发生,首先暂停该任务的调度（在内部源码上的实现是将next_run_time置空）
                在程序运行完成后，再恢复该程序的调度。
             """
+
+            # 获取run之前的状态
+            next_time = scheduler.get_job(job_name).next_run_time
+            before_run_status = STATUS_SLEEP if next_time else STATUS_PAUSED
+
             try:
-                scheduler.pause_job(job_name)
+                # 总的思想是，run前是什么状态，run之后便恢复到什么状态
+                if before_run_status == STATUS_SLEEP:
+                    scheduler.pause_job(job_name)
+
                 up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
+
                 scheduler.run_job(job_name)  # 运行
                 save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
                 msg = MSG_JOB_RUNNING_SUCCESS
@@ -230,31 +251,34 @@ class JobsResource(Resource):
                 msg = MSG_JOB_RUNNING_FAILED
 
             finally:
-                run_status = RESULT_SUCCESS if not error else RESULT_FAILED
-                up_job_status(job_name, JobStatus, STATUS_SLEEP, run_status)  # 修改任务状态
-                scheduler.resume_job(job_name)  # 恢复
+                run_result = RESULT_SUCCESS if not error else RESULT_FAILED
+                up_job_status(job_name, JobStatus, before_run_status, run_result)  # 修改任务状态
 
-        # 修改除job_name外的全部信息
+                if before_run_status == STATUS_SLEEP:
+                    scheduler.resume_job(job_name)  # 恢复
+
+        # 修改除job_name外的信息
         elif action == "update":
-            args = parser_mod.parse_args()
+            args_mod = parser_mod.parse_args()
+
+            full_data = {"job_name": job_name}
+            set_model_value(full_data, args_mod)
+            # 移除没有值的键值对儿
+            full_data = rm_empty_kw(full_data)
+
             try:
-                if hasattr(args, "time_data"):
+                if "time_style" in full_data and "time_data" in full_data:
+
                     # 字符串时间变字典时间
-                    trigger_data = cron_to_dict(CRON_KEYS, args.get("time_data"))
+                    trigger_data = cron_to_dict(CRON_KEYS, full_data.get("time_data"))
                     changes = {
                         # 时间风格
-                        "trigger": args.get("time_style")
+                        "trigger": full_data.get("time_style")
                     }
                     changes.update(trigger_data)
 
                     # 修改任务时间
-                    scheduler.modify_job(job_name, changes)
-
-                full_data = {
-                    "job_name": job_name
-                }
-                set_model_value(full_data, args)
-                full_data.pop("action")
+                    scheduler.modify_job(job_name, **changes)
 
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)
@@ -288,11 +312,9 @@ class JobsResource(Resource):
         """
         error = ""
         try:
-            args = {
-                "job_name": job_name
-            }
+            args = {"job_name": job_name}
             # 移除
-            scheduler.remove_job(job_name)
+            # scheduler.remove_job(job_name)
 
             # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
             save_mod_log(ACTION_DELETED, args, ModLog, JobData)
@@ -302,7 +324,7 @@ class JobsResource(Resource):
         except Exception as err:
             error = str(err)
 
-        status, msg = (HTTP_OK, MSG_JOB_DELETED_FAILED) if error else (HTTP_EXECUTE_FAILED, MSG_JOB_DELETED_SUCCESS)
+        status, msg = (HTTP_EXECUTE_FAILED, MSG_JOB_DELETED_FAILED) if error else (HTTP_OK, MSG_JOB_DELETED_SUCCESS)
         result = {
             "status": status,
             "msg": msg,

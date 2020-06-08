@@ -16,6 +16,50 @@ from App.setting import (ACTION_CREATED, ACTION_UPDATED, ACTION_DELETED, STATUS_
                          )
 
 
+def model_to_dict(model: BaseModel):
+    """
+    获取模型对应的数据库字段
+    :param model:           BaseModel           数据库模型
+    :return:                dict(key, value)    该模型包含的字段
+    """
+    result = {}
+    for k in model.__dict__.keys():
+        if k.startswith("_"):
+            continue
+
+        v = getattr(model, k)
+        result[k] = v
+
+    return result
+
+
+def rm_bad_cols(mod, base_mod):
+    """
+    移除mod中存在的base_mod中的字段, save_mod_log 用到此函数
+    base_mod 有可能是 mod 的基础类
+    :param mod:             BaseModel
+    :param base_mod:        BaseModel
+    :return:                Boolean     True：成功，False：失败
+    """
+    bad_keys = get_bad_keys(base_mod)
+
+    try:
+        if isinstance(mod, base_mod):
+            mod = model_to_dict(mod)
+
+        if isinstance(mod, dict):
+            for key in bad_keys:
+                if key in mod:
+                    mod.pop(key)
+        else:
+            raise Exception(f"[{__file__}:rm_bad_cols: invalid mod type.]")
+
+    except Exception as err:
+        raise Exception(f"[ {__file__}:rm_bad_cols: {str(err)}.]")
+
+    return mod
+
+
 def save_mod_log(action, args, model_mod, model_data):
     """
     TODO: [2020-06-05]
@@ -25,18 +69,26 @@ def save_mod_log(action, args, model_mod, model_data):
     :param model_mod:       Model       job数据修改日志模型
     :param model_data:      Model       job数据模型
     """
+    # 传入的actions有可能是单词（如"pause"）,为了统一标准，这里统一使用单个字母标识
     action = action if len(action) == 1 else STATUS_DICT.get(action)
-    t_mod = model_mod()
     name = args.get("job_name")
+
+    t_mod = model_mod()
     executable = False
 
+    # 新创建的job
     if action == ACTION_CREATED:
         set_model_value(t_mod, args)
         executable = True
 
+    # job 内容（主要是时间风格和时间内容）有变更
+    # 注意，这里的思路是记录日志，变动一次就插入一条数据。
+    # 所以，update job最后在ORM中用的是插入，而不是更新
     elif action == ACTION_UPDATED:
         job_data = model_data.query.filter(model_data.job_name == name).first()
         if job_data:
+            job_data = rm_bad_cols(job_data, BaseModel)
+            # 先赋予全部的值，然后再更新变动的字段的值
             set_model_value(t_mod, job_data)
             set_model_value(t_mod, args)
             executable = True
@@ -44,13 +96,9 @@ def save_mod_log(action, args, model_mod, model_data):
     elif action in (ACTION_DELETED, STATUS_PAUSED, STATUS_SLEEP, STATUS_RUNNING):
         job_data = model_data.query.filter(model_data.job_name == name).first()
         if job_data:
+            job_data = rm_bad_cols(job_data, BaseModel)
             set_model_value(t_mod, job_data)
             executable = True
-
-    bad_keys = get_bad_keys(BaseModel) + ["status"]
-    for key in bad_keys:
-        if hasattr(t_mod, key):
-            delattr(t_mod, key)
 
     if executable:
         setattr(t_mod, "action", action)
@@ -135,8 +183,10 @@ def del_job(name, model_status, model_data):
     :param model_status:        JobStatus   job status模型
     :param model_data:          JobData     job data模型
     """
-    t_status, t_data = model_status, model_data
-    result = t_status.delete(name) and t_data.delete(name)
+    t_status = model_status.query.filter(model_status.job_name == name).first()
+    t_data = model_data.query.filter(model_data.job_name == name).first()
+
+    result = t_status.delete() and t_data.delete()
 
     return result
 
@@ -152,23 +202,6 @@ def get_bad_keys(base_model):
         if k.startswith("_") or callable(getattr(base_model, k)):
             continue
         result.append(k)
-
-    return result
-
-
-def model_to_dict(model: BaseModel):
-    """
-    获取模型对应的数据库字段
-    :param model:           BaseModel           数据库模型
-    :return:                dict(key, value)    该模型包含的字段
-    """
-    result = {}
-    for k in model.__dict__.keys():
-        if k.startswith("_"):
-            continue
-
-        v = getattr(model, k)
-        result[k] = v
 
     return result
 
@@ -191,6 +224,21 @@ def set_model_value(obj, args):
         for item in args.items():
             k, v = item
             setattr(obj, k, v)
+
+
+def rm_empty_kw(data: dict):
+    """
+    删除字典中值为空的键值对
+    """
+    result = {}
+    if not isinstance(data, dict):
+        raise Exception("The object is not a dict")
+
+    for k, v in data.items():
+        if v:
+            result[k] = v
+
+    return result
 
 
 def get_next_time(job_list):

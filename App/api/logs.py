@@ -14,7 +14,7 @@ from flask_restful.fields import String, Integer, DateTime, Nested, List
 from flask_restful.reqparse import RequestParser
 
 from App.models.logs import RunningLog
-from App.setting import HTTP_OK
+from App.setting import HTTP_OK, HTTP_QUERY_ERROR, MSG_JOB_QUERY_SUCCESS, MSG_JOB_QUERY_FAILED
 
 parser_logs = RequestParser(trim=True)
 parser_logs.add_argument("total", type=int, required=True, help="查询正确的查询数据量")
@@ -40,26 +40,28 @@ logs_fields_running = {
 
 class LogResource(Resource):
     def get(self, job_name):
-        arges = parser_logs.parse_args()
-        total = arges.total
+        args = parser_logs.parse_args()
+        total = args.total
 
-        if total <= 1:
-            # 查询单个job_name最新的运行日志
-            log = RunningLog.query.filter(RunningLog.job_name == job_name).order_by(-RunningLog.id).first()
-            result = {
-                "status": HTTP_OK,
-                "msg": "log queried.",
-                "total":  1 if log else 0,
-                "data": log
-            }
-            return marshal(result, logs_fields_running)
+        error, data, len_data = "", "", 0
+        try:
+            if total <= 1:
+                # 查询单个job_name最新的运行日志
+                data = RunningLog.query.filter(RunningLog.job_name == job_name).order_by(-RunningLog.id).first()
+                len_data = 1 if data else len_data
+            else:
+                data = RunningLog.query.filter(RunningLog.job_name == job_name).order_by(-RunningLog.id).limit(total).all()
+                len_data = len(data)
 
-        else:
-            logs = RunningLog.query.filter(RunningLog.job_name == job_name).order_by(-RunningLog.id).limit(total).all()
+        except Exception as err:
+            error = str(err)
+
+        finally:
+            status, msg = (HTTP_OK, MSG_JOB_QUERY_SUCCESS) if not error else (HTTP_QUERY_ERROR, MSG_JOB_QUERY_FAILED)
             result = {
-                "status": HTTP_OK,
-                "msg": "log queried.",
-                "total": len(logs),
-                "data": logs
+                "status": status,
+                "msg": msg,
+                "total": len_data,
+                "data": data
             }
             return marshal(result, logs_fields_running)
