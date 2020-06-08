@@ -314,7 +314,7 @@ class JobsResource(Resource):
         try:
             args = {"job_name": job_name}
             # 移除
-            # scheduler.remove_job(job_name)
+            scheduler.remove_job(job_name)
 
             # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
             save_mod_log(ACTION_DELETED, args, ModLog, JobData)
