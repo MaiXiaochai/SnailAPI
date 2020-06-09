@@ -31,6 +31,7 @@ MSG_JOB_PAUSED_FAILED = "任务暂停失败"
 MSG_JOB_RESUMED_SUCCESS = "任务恢复成功"
 MSG_JOB_RESUMED_FAILED = "任务恢复失败"
 
+MSG_JOB_RUNNING_START = "任务开始运行"
 MSG_JOB_RUNNING_SUCCESS = "任务运行成功"
 MSG_JOB_RUNNING_FAILED = "任务运行失败"
 
@@ -42,8 +43,6 @@ MSG_JOB_EXECUTE_FAILED = "任务执行失败"
 
 MSG_JOB_DELETED_SUCCESS = "任务删除成功"
 MSG_JOB_DELETED_FAILED = "任务删除失败"
-
-
 
 # 任务运行状态
 STATUS_SLEEP = "S"      # SLEEP     任务已添加等待运行

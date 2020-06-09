@@ -1,4 +1,4 @@
-#  SnailAPI  使用说明
+#  SnailAPI接口使用说明
 
 ---
 
@@ -103,17 +103,21 @@
 
     + `request`
       
+        +  `timeStyle`:` cron|interval|date`(目前只支持`cron`，可以满足`99%`的需求)
+        + `cateogry`: ` mes|erp|warranty|radar|pms|stopcard|...`（所属业务）
+        + `jobType`: `cli|script|proc`(目前只支持`cli`)
+        
         ```shell
         $ curl -X POST http://localhost:5000/api/jobs/{job_name}
           -H 'Content-Type: application/json'
           -d '{
-                "jobType": "cli", 	 # cli|script|proc
-                "jobCmd": "echo [%date%%time%] [SnailAPI.]",
-                "timeStyle": "cron",  	 # cron|interval|date
+                "jobType": "cli",
+                "jobCmd": "echo %cd%",
+                "timeStyle": "cron",
                 "timeData": "*/1 * * * *",
                 "createdBy": "san.zhang",
-                "category": "mes", 		 # mes|erp|warranty|radar|pms|stopcard|...（所属业务）
-                "desc": "打印时间测试用"
+                "category": "mes",
+                "desc": "打印执行时的路径"
               }'
         ```
         
@@ -125,7 +129,7 @@
             "msg": "任务添加成功",
             "jobName": "snail_job"
         }
-        ```
+      ```
     
   + **2.1.2 修改n(n≥1)个任务的状态**
 
@@ -138,42 +142,49 @@
 
     + `request`
 
+      + `pause|resume|run`: 暂停|恢复|立刻运行
+      + 注意：`run`的时候，程序执行完成才会返回结果，请根据具体程序执行时长，设置`request` `timeout`
+      
       ```shell
       $ curl -X PUT http://localhost:5000/api/jobs/{job_name1};{job_name2}
         -H 'Content-Type: application/json'
         -d '{
-        		"action": "pause"			# pause|resume|run 暂停|恢复|立刻运行
+        		"action": "pause"
             }'
       ```
       
-  + `response`
+    + `response`
     
-    ```json
-      {
-          "status": 200,
-          "msg": "任务已暂停",
-          "jobName": "snail_job",
-          "action": "pause"
-      }
+      ```shell
+        {
+            "status": 200,
+            "msg": "任务已暂停",		# 任务恢复成功| 任务开始运行|任务运行成功
+            "jobName": "snail_job",
+            "action": "pause"
+        }
       ```
     
+      
     
-    
-  + **2.1.3 修改单个任务全部数据**
+  + **2.1.3 修改单个任务数据**
 
     + `request`
       
+        + `"action": "update"`为必须字段和值
+        + 修改时间信息时，`timeStyle`和`timeData`必须同时出现且有值
+        + 可修改的字段为 `timeStyle`, `timeData`,`crea`, `cateogry`,`desc` 
+        + 修改部分字段，只需要将值写入`json`内，并赋值即可，只有字段，值为空的字段不会被修改。
+        
         ```shell
         $ curl -X PUT http://localhost:5000/api/jobs/{job_name}
           -H 'Content-Type: application/json'
           -d '{
-                "jobType": "cli",    # cli|script|proc
-                "jobCmd": "echo [%date%%time%] [SnailAPI.]",
-                "timeStyle": "cron", # cron|interval|date
+          	    "action": "update",
+                "timeStyle": "cron", 	# cron|interval|date
                 "timeData": "*/1 * * * *",
-                "createdBy": "san.zhang",
+                "createdBy": "maixiaochai",
                 "category": "mes"， 	   # mes|erp|warranty|radar|pms|stopcard|...（所属业务）
-              	"desc": "我更新了描述信息"
+              	"desc": "更新了全部可修改的字段"
               }'
         ```
     
@@ -209,11 +220,9 @@
                   "timeStyle": "cron",
                   "timeData": "*/1 * * * *"
               }
-          ],
-          "error": ""
+          ]
       }
       ```
-
       
 
   + **2.1.5 获取所有任务**
@@ -249,12 +258,32 @@
                     "timeStyle": "cron",
                     "timeData": "*/1 * * * *"
                 }
-            ],
-            "error": ""
+            ]
         }
         ```
-        
-        
+
+  + **2.1.6 删除单个任务**
+
+    + `request`
+
+      ```shell
+      curl -X DELETE http://127.0.0.1:5000/api/jobs/{job_name}
+      ```
+
+    + `response`
+
+      `"action": "D"`，表示任务状态为删除（`D: DELETE`）
+
+      ```json
+      {
+          "action": "D",
+          "jobName": "snail_job",
+          "msg": "任务删除成功",
+          "status": 200
+      }
+      ```
+
+      
 
 + **2.2 日志**
 
@@ -268,11 +297,13 @@
         
         + `response`
         
+          + `stderr`，有错误的时候才会出错
+          
           ```json
           // /snail_job?total=2
           {
               
-              "msg": "log queried.",    
+              "msg": "查询成功",
               "total": 2,
               "data": [
                   {
@@ -294,16 +325,26 @@
                       "stderr": ""
                   }
               ]
-          }
+        }
           ```
-        
+          
           
 ---
 
 ##### 修改历史
 
-+ [2020-05-28]
-  + 创建文档
+[2020-06-09]
+
++ 根据功能调整，修改部分接口的请求参数和响应数据
++ 新增任务数据修改的接口说明
++ 新增任务状态修改 的接口说明
++ 新增删除任务的接口说明
+
+[2020-05-28]
+
++ 创建文档
+
+  
 
 参考文献：
 

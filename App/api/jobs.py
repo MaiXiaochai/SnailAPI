@@ -54,6 +54,7 @@ parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=["cron
                         help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
 
 parser_mod.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
+parser_mod.add_argument("createdBy", dest="created_by", type=str, help="请输入需求人")
 parser_mod.add_argument("category", dest="category", type=str,
                         help="请输入任务所属业务，[mes|erp|warranty|radar|pms|stopcard|...]")
 
@@ -240,10 +241,10 @@ class JobsResource(Resource):
                 if before_run_status == STATUS_SLEEP:
                     scheduler.pause_job(job_name)
 
-                up_job_status(job_name, JobStatus, STATUS_DICT.get(action))  # 修改任务状态
+                up_job_status(job_name, JobStatus, STATUS_DICT.get(action))    # 修改任务状态
+                save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
 
                 scheduler.run_job(job_name)  # 运行
-                save_mod_log(action, {"job_name": job_name}, ModLog, JobData)  # 保存人为动作
                 msg = MSG_JOB_RUNNING_SUCCESS
 
             except Exception as err:
