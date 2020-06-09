@@ -10,12 +10,12 @@
 """
 from flask_restful import Api
 
-from .intro import IntroResource
+from .intros import IntroResource
 from .jobs import JobsResource
 from .logs import LogResource
-from ..setting import api_interface, ERRORS
+from ..setting import API_INTERFACE, ERRORS
 
-api_snail = Api(prefix=api_interface, errors=ERRORS, catch_all_404s=True)
+api_snail = Api(prefix=API_INTERFACE, errors=ERRORS, catch_all_404s=True)
 api_snail.add_resource(IntroResource, "/")
 api_snail.add_resource(JobsResource, "/jobs/<string:job_name>")
 api_snail.add_resource(LogResource, "/logs/<string:job_name>")

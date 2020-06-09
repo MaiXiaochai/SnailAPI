@@ -85,26 +85,26 @@ def log_end(status_id, log_id, return_code, stdout, stderr, model_status, model_
     return job_status.commit(), log_run.commit()
 
 
-def exec_cmd(command):
+def exec_cmd(command, cwd=None):
     """
     执行shell命令
     :param command:    str     命令内容
-    :return:
+    :param cwd:        str     工作目录
     """
-    sub = run(command, capture_output=True, shell=True, text=True)
+    sub = run(command, cwd=cwd, capture_output=True, shell=True, text=True)
     return sub.args, sub.returncode, sub.stdout, sub.stderr
 
 
-def executor(cmd, job_name):
+def executor(cmd, job_name, cwd=None):
     """
     该程序作为scheduler.add_job的func
     :param cmd:             str     命令内容
     :param job_name:        str     job的身份标识
-    TODO
+    :param cwd:             str     工作目录
     """
     with scheduler.app.app_context():
         status_id, log_id = log_start(job_name, cmd, JobStatus, RunningLog)
-        _, return_code, stdout, stderr = exec_cmd(cmd)
+        _, return_code, stdout, stderr = exec_cmd(cmd, cwd)
         _ = log_end(status_id, log_id, return_code, stdout, stderr, JobStatus, RunningLog)
 
 
@@ -131,12 +131,14 @@ def job_handler(main_scheduler, kwargs):
     job_cmd = kwargs["job_cmd"]
     time_style = kwargs["time_style"]
     time_data = kwargs["time_data"]
+    cwd = kwargs["cwd"]
 
     trigger_time = cron_to_dict(CRON_KEYS, time_data)
 
     job_args = {
         "cmd": job_cmd,
-        "job_name": job_name
+        "job_name": job_name,
+        "cwd": cwd
     }
     # TODO: 各种执行器， cli, script, proc
     if time_style == "cron":
@@ -149,6 +151,7 @@ def job_handler(main_scheduler, kwargs):
             replace_existing=True  # 如果任务已经存在则替换
         )
 
+    # TODO: 对 date和 interval时间风格的支持
     elif time_style == "date":
         raise Exception("date时间风格暂不支持")
 

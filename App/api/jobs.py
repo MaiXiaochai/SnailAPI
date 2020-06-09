@@ -14,16 +14,18 @@ from flask import jsonify
 from flask_restful import Resource, marshal
 from flask_restful.fields import Integer, String, DateTime, Nested, List
 from flask_restful.reqparse import RequestParser
+from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from App.extensions import scheduler
 from App.models.jobs import JobData, JobStatus
 from App.models.logs import ModLog
 from App.setting import *
 from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
-                       save_mod_log, cron_to_dict, up_job_data, del_job, rm_empty_kw
+                       save_mod_log, cron_to_dict, up_job_data, del_job, rm_empty_kw, FileHandler
                        )
 
-# Request 解析参数。自动去重
+# Request 解析参数。自动去除值两边空格
 parser_jobs = RequestParser(trim=True)
 
 # 继承parser_job
@@ -35,8 +37,8 @@ parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True
                          help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
 
 parser_jobs.add_argument("timeData", dest="time_data", type=str, required=True, help="请输入执行时间，如 0 5 * * *")
-parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", ],
-                         help="请输入任务类型，暂时只支持cli，[cli|script|proc]")
+parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", "script"],
+                         help="请输入任务类型，暂时不支持proc，[cli|script|proc]")
 
 parser_jobs.add_argument("jobCmd", dest="job_cmd", type=str, required=True, help="请输入任务运行命令, 如 python test.py")
 parser_jobs.add_argument("createdBy", dest="created_by", type=str, required=True, help="请输入任务创建人姓名")
@@ -44,6 +46,8 @@ parser_jobs.add_argument("category", dest="category", type=str, required=True,
                          help="请输入任务所属业务，[mes|erp|warranty|radar|pms|stopcard|...]")
 
 parser_jobs.add_argument("desc", dest="desc", type=str, required=True, help="请输入任务描述")
+# 文件上传
+parser_jobs.add_argument("file", type=FileStorage, help="请上传文件", location=["files"])
 
 # ============================================== [ parser_action ] ==============================================
 parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
@@ -61,6 +65,21 @@ parser_mod.add_argument("category", dest="category", type=str,
 parser_mod.add_argument("desc", dest="desc", type=str, help="请输入任务描述")
 
 # ============================================== [ parser done ] ==============================================
+post_fields = {
+    "jobName": String(attribute="job_name"),
+    "job_type": String(attribute="job_type"),
+    "jobCmd": String(attribute="job_cmd"),
+    "timeStyle": String(attribute="time_style"),
+    "timeData": String(attribute="time_data")
+}
+
+posts_fields = {
+    "status": Integer,
+    "msg": String,
+    "total": Integer,
+    "data": List(Nested(post_fields))
+}
+
 job_fields = {
     "jobName": String(attribute="job_name"),
     "job_type": String(attribute="job_type"),
@@ -80,11 +99,8 @@ jobs_fields = {
 
 class JobsResource(Resource):
     """
-    TODO:
-        1) job添加是否成功的判断，成功后再写入日志
-        2) job修改或者删除后，job_data数据表中，也做相应的修改
+    Job CRUD/RUN/PAUSE/RESUME
     """
-
     def get(self, job_name):
         """
         任务获取,可获取单个，多个
@@ -137,27 +153,56 @@ class JobsResource(Resource):
 
     def post(self, job_name):
         """添加一个任务"""
-        args = parser_jobs.parse_args()
+        job_args = parser_jobs.parse_args()
 
-        # 准备添加到调度的数据
-        sched_dict = {
-            "job_name": job_name,
-            "job_cmd": args.job_cmd,
-            "time_style": args.time_style.lower(),
-            "time_data": args.time_data
-        }
+        full_data = {"job_name": job_name}
+        set_model_value(full_data, job_args)
+        full_data.pop("file")
 
         status, msg, error = HTTP_CREATED_OK, MSG_JOB_CREATED_SUCCESS, ""
+
         try:
             _exist = scheduler.get_job(job_name)
+
             if not _exist:
+                # 准备添加到调度的数据
+                sched_dict = {
+                    "job_name": job_name,
+                    "job_cmd": job_args.job_cmd,
+                    "time_style": job_args.time_style.lower(),
+                    "time_data": job_args.time_data,
+                    "cwd": None
+                }
+
+                job_type = job_args.job_type.lower()
+
+                if job_type == "script":
+                    file_content = job_args.file
+
+                    if not file_content:
+                        raise Exception(MSG_FILE_EMPTY)
+
+                    else:
+                        src_filename = file_content.filename
+                        s_filename = secure_filename(src_filename)
+
+                        # 替换命令中的不安全文件名称
+                        new_cmd = job_args.job_cmd.replace(src_filename, s_filename)
+                        full_data["job_cmd"] = sched_dict["job_cmd"] = new_cmd
+
+                        abs_dir = FileHandler().abs_dirname(job_args.category)          # 保存目录, 绝对路径
+                        _ = FileHandler.mkdir(abs_dir)                                  # 创建目录
+                        full_data["cwd"] = sched_dict["cwd"] = abs_dir                  # 调度的工作目录
+
+                        # 保存文件
+                        abs_filename = f"{abs_dir}/{s_filename}"
+                        file_content.save(abs_filename)
+
+                else:
+                    raise Exception(MSG_CMD_VALID)
+
                 # 将 job添加到调度
                 job_handler(scheduler, sched_dict)
-
-                full_data = {
-                    "job_name": job_name
-                }
-                set_model_value(full_data, args)
 
                 # job 数据保存到数据库
                 save_job_data(full_data, JobData)
@@ -180,19 +225,18 @@ class JobsResource(Resource):
         result = {
             "status": status,
             "msg": msg,
-            "jobName": job_name
+            "total": 0 if error else 1,
+            "data": full_data
         }
 
         # 如果出现错误，则在返回结果中加上报错内容
         if error:
             result["error"] = error
 
-        return jsonify(result)
+        return marshal(result, posts_fields)
 
     def put(self, job_name):
         """
-        TODO: 1) 任务运行状态可批量修改
-              2) 修改job全部数据和部分数据的API和 ModLog保存
         处理任务操作 暂停/恢复/立即执行
         """
         args_actions = parser_actions.parse_args()

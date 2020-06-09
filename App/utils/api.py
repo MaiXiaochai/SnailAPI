@@ -8,6 +8,9 @@
 @Created on : 2020/5/22 15:47
 --------------------------------------
 """
+from os import makedirs
+from os.path import join
+
 from sqlalchemy import func
 
 from App.models import BaseModel
@@ -62,7 +65,6 @@ def rm_bad_cols(mod, base_mod):
 
 def save_mod_log(action, args, model_mod, model_data):
     """
-    TODO: [2020-06-05]
     保存job数据和人为状态修改记录,每次人为的CRUD、pause、resume、run操作都会记录。
     :param action:          str         job信息修改的操作名称
     :param args:            dict        job 信息
@@ -259,3 +261,32 @@ def get_next_time(job_list):
         _tmp = {}
 
     return result
+
+
+class FileHandler:
+    """
+    对上传文件的处理，保存、删除等
+    """
+    def __init__(self):
+        from App.setting import UPLOAD_DIR
+        self.upload_dir = UPLOAD_DIR
+
+    @staticmethod
+    def mkdir(dir_path):
+        """
+        创建文件夹，可创建多层目录
+        :param dir_path:    str         文件夹路径
+        :return:            Boolean     True: 创建成功或者已经存在，False: 创建失败
+        """
+        return makedirs(dir_path, exist_ok=True)
+
+    def abs_dirname(self, category):
+        """
+        获取存放文件的路径和文件名
+        :param category:        str         所属业务
+        :return:                str         abs_dir
+        """
+        dir_path = join(self.upload_dir, category)
+        result = dir_path.replace("\\", "/").lower()
+
+        return result

@@ -33,7 +33,6 @@ def get_db_uri(db_info):
 
         if "service_name" in _keys:
             uri = uri_tpl + "?service_name={service_name}"
-
         else:
             uri = uri_tpl + "{name}"
 

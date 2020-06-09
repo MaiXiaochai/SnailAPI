@@ -115,7 +115,7 @@
                 "jobCmd": "echo %cd%",
                 "timeStyle": "cron",
                 "timeData": "*/1 * * * *",
-                "createdBy": "san.zhang",
+                "createdBy": "zhang",
                 "category": "mes",
                 "desc": "打印执行时的路径"
               }'

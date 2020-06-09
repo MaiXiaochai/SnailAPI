@@ -19,6 +19,10 @@ HTTP_QUERY_ERROR = 400
 # 任务请求返回信息 msg
 MSG_JOB_EXISTED = "任务已存在"
 
+MSG_FILE_EMPTY = "脚本是空的或者没有上传"
+
+MSG_CMD_VALID = "不支持的命令模式"
+
 MSG_JOB_QUERY_SUCCESS = "查询成功"
 MSG_JOB_QUERY_FAILED = "查询错误"
 
@@ -60,13 +64,13 @@ STATUS_DICT = {
 RESULT_SUCCESS = "Y"    # YES       运行成功
 RESULT_FAILED = "N"     # NO        运行失败
 
-# TODO: 任务修改操作,用于任务修改的记录
+# 任务修改操作,用于任务修改的记录
 ACTION_CREATED = "C"    # CREATE    创建
 ACTION_UPDATED = "U"    # UPDATE    修改
 ACTION_DELETED = "D"    # DELETE    删除
 
 
-# TODO: 自定义错误字典，API使用, 暂时还没有自定义错误
+# TODO: 自定义错误字典，API使用, 暂时还没有用到
 ERRORS = {
     'UserAlreadyExistsError': {
         'message': "A user with that username already exists.",
@@ -83,7 +87,7 @@ ERRORS = {
 CRON_KEYS = ["minute", "hour", "day", "month", "day_of_week"]
 
 
-# ============================[ APScheduler EVENT MSG ] ============================
+# ============================[ APScheduler listener设置 ] ============================
 EVENT_MSG = (
     "EVENT_SCHEDULER_STARTED",
     "EVENT_SCHEDULER_SHUTDOWN",

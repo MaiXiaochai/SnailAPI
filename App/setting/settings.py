@@ -16,8 +16,6 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from App.extensions import db
 from App.utils import get_db_uri
 
-BASE_DIR = dirname(dirname(abspath(__file__)))
-
 
 class BaseConfig:
     """
@@ -37,6 +35,11 @@ class BaseConfig:
     # ================[ 接口版本设置 ]================
     API_INTERFACE = "/api"
 
+    # ================[ 上传文件设置 ]================
+    BASE_DIR = dirname(dirname(dirname(abspath(__file__))))
+    DIR_NAME = "scripts"
+    UPLOAD_DIR = join(BASE_DIR, DIR_NAME)
+
     # ================[ APScheduler设置 ]================
     # 时区
     SCHEDULER_TIMEZONE = 'Asia/Shanghai'
@@ -51,13 +54,27 @@ class BaseConfig:
         'default': ThreadPoolExecutor(50),
         'processpool': ProcessPoolExecutor(max_workers=8),
     }
+    """
+    coalesce:           是否允许job实例合并
+                            比如上个任务实例运行时间超过了运行间隔，到了再次运行新实例的时间，
+                            这个时候，是否将两个实例合并为一个实例运行
+                                True:合并，一个任务只会运行一个实例
+                                False:不合并，一个任务会同时运行多个实例
+    max_instances:      单个job最多可以运行几个实例
+    misfire_grace_time: 任务因不可抗力在规定时间点没有执行时，允许自动补偿执行的宽限期
+                            假设该值为1800s（0.5h）,任务将在9:00 运行，结果 8:55 ~ 9:10调度程序挂了，
+                            那么只要在9:00 ~ 9:30内调度程序恢复正常（按1800s值计算），该任务会马上执行。
+                            简称：虽迟但执
+    """
     SCHEDULER_JOB_DEFAULTS = {
         "coalesce": True,
-        "max_instances": 1,                 # 单个作业可以运行几个实例
-        "misfire_grace_time": 1800,         # 假设任务将在9:00 运行，结果 8:55 ~ 9:10调度程序挂了，
-                                            # 那么只要在9:00 ~ 9:30内重新启动（按1800s值计算），该任务会继续运行
-
+        "max_instances": 1,
+        "misfire_grace_time": 1800,
     }
+
+    #
+    # 管理员用户设置
+    ADMINS = ("snail",)
 
     # ===================[ session设置 ]===================
     #
@@ -79,17 +96,6 @@ class BaseConfig:
     # 缓存数据超时时间(seconds)
     CACHE_DEFAULT_TIMEOUT = 60 * 60 * 24 * 30
 
-    # ===================[ 邮箱设置 ]===================
-    MAIL_SERVER = "smtp.163.com"
-    # 163 SSL协议端口 465/994, 非SSL协议端口25
-    # 注意这里启用的是TLS协议(transport layer security)，而不是SSL协议所用的是25号端口
-    MAIL_PORT = 25
-    MAIL_USE_TLS = True
-    MAIL_USERNAME = "chargestarmap@163.com"
-    # 163这里用的是授权码
-    MAIL_PASSWORD = """RYLVFPIMSJSDKVTD"""
-    MAIL_DEFAULT_SENDER = MAIL_USERNAME
-
 
 class DevelopBaseConfig(BaseConfig):
     """
@@ -104,13 +110,13 @@ class TestingBaseConfig(BaseConfig):
     """
     TESTING = True
     db_info = {
-        "engine": "mysql",
-        "driver": "pymysql",
-        "user": "sched",
-        "password": "sched123",
-        "host": "127.0.0.1",
-        "port": 1521,
-        "name": "Snail"
+        "engine": "postgresql",
+        "driver": "psycopg2",
+        "user": "pguser",
+        "password": "Pg_1234.",
+        "host": "192.168.158.14",
+        "port": 5432,
+        "name": "SnailData"
     }
     # ORM 数据库连接串
     SQLALCHEMY_DATABASE_URI = get_db_uri(db_info)
@@ -121,13 +127,13 @@ class StagingBaseConfig(BaseConfig):
     演示环境配置
     """
     db_info = {
-        "engine": "mysql",
-        "driver": "pymysql",
-        "user": "sched",
-        "password": "sched123",
-        "host": "127.0.0.1",
-        "port": 1521,
-        "name": "Snail"
+        "engine": "postgresql",
+        "driver": "psycopg2",
+        "user": "pguser",
+        "password": "Pg_1234.",
+        "host": "192.168.158.14",
+        "port": 5432,
+        "name": "SnailData"
     }
     # ORM 数据库连接串
     SQLALCHEMY_DATABASE_URI = get_db_uri(db_info)
@@ -158,18 +164,9 @@ envs = {
     "default": DevelopBaseConfig,
 }
 
-# 管理员用户设置
-ADMINS = (
-    "snail",
-)
-
-# 静态文件路径
-UPLOAD_DIR = join(BASE_DIR, "App/static/upload/icons")
-
-# 相对文件路径
-FILE_PATH = "/static/upload/icons"
-
 
 if __name__ == "__main__":
-    res = DevelopBaseConfig().CACHE_DIR
+    bc = BaseConfig()
+    # E:\Code\github\SnailAPI\App\scripts
+    res = bc.UPLOAD_DIR
     print(res)

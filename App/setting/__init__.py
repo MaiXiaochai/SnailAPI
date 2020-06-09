@@ -16,4 +16,5 @@ from .settings import envs
 flask_env = environ.get("FLASK_ENV", "default")
 cfg_obj = envs.get(flask_env)
 
-api_interface = cfg_obj.API_INTERFACE
+UPLOAD_DIR = cfg_obj.UPLOAD_DIR
+API_INTERFACE = cfg_obj.API_INTERFACE
