@@ -33,12 +33,13 @@ parser_actions = parser_jobs.copy()
 # 继承 parser_job
 parser_mod = parser_jobs.copy()
 # ============================================== [ parser_job ] ==============================================
-parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True, choices=["cron", ],
-                         help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
+parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True, choices=[f"{TRIGGER_TYPE_CRON}", ],
+                         help=f"请输入时间风格, [{TRIGGER_TYPE_CRON}|{TRIGGER_TYPE_DATE}|{TRIGGER_TYPE_INTERVAL}]")
 
 parser_jobs.add_argument("timeData", dest="time_data", type=str, required=True, help="请输入执行时间，如 0 5 * * *")
-parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True, choices=["cli", "script"],
-                         help="请输入任务类型，暂时不支持proc，[cli|script|proc]")
+parser_jobs.add_argument("jobType", dest="job_type", type=str, required=True,
+                         choices=[f"{JOB_TYPE_CLI}", f"{JOB_TYPE_SCRIPT}"],
+                         help=f"请输入正确的任务类型,[{JOB_TYPE_CLI}|{JOB_TYPE_SCRIPT}]")
 
 parser_jobs.add_argument("jobCmd", dest="job_cmd", type=str, required=True, help="请输入任务运行命令, 如 python test.py")
 parser_jobs.add_argument("createdBy", dest="created_by", type=str, required=True, help="请输入任务创建人姓名")
@@ -54,8 +55,8 @@ parser_actions.add_argument("action", type=str, required=True, help="请输入�
 
 # ================================================ [ parser_mod ] ================================================
 # 5个参数 action, timeStyle, timeData, desc, category
-parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=["cron", ],
-                        help="请输入时间风格, 暂时只支持 cron, [cron|interval|date]")
+parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=[f"{TRIGGER_TYPE_CRON}", ],
+                        help=f"请输入时间风格, [{TRIGGER_TYPE_CRON}|{TRIGGER_TYPE_DATE}|{TRIGGER_TYPE_INTERVAL}]")
 
 parser_mod.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
 parser_mod.add_argument("createdBy", dest="created_by", type=str, help="请输入需求人")
@@ -176,7 +177,7 @@ class JobsResource(Resource):
 
                 job_type = job_args.job_type.lower()
 
-                if job_type == "script":
+                if job_type == JOB_TYPE_SCRIPT:
                     file_content = job_args.file
 
                     if not file_content:
@@ -186,7 +187,8 @@ class JobsResource(Resource):
                         src_filename = file_content.filename
                         s_filename = secure_filename(src_filename)
 
-                        # 替换命令中的不安全文件名称
+                        # 替换命令中的文件名称为安全的文件名称，防止意外
+                        # Demo: "../../test.py" -> "test.py"
                         new_cmd = job_args.job_cmd.replace(src_filename, s_filename)
                         full_data["job_cmd"] = sched_dict["job_cmd"] = new_cmd
 
@@ -207,7 +209,7 @@ class JobsResource(Resource):
                 # job 数据保存到数据库
                 save_job_data(full_data, JobData)
 
-                # 添加job name 到job status 表
+                # 添加job_name 到job 状态表
                 save_job_status(job_name, JobStatus)
 
                 # 添加job 修改日志
@@ -269,11 +271,12 @@ class JobsResource(Resource):
         elif action == "run":
             """
             [2020-06-03]
-            Q: 为什么在run_job前后加上pause_job和resume_job？
-            A: 主要是考虑到在任务运行期间，该任务的调度时间也到了，会造成两次运行。
+            Q: 为什么在 run_job 前后加上 pause_job 和 resume_job？
+            A: 主要是考虑到在任务运行期间，假设该任务的调度时间也到了，会造成两次运行。
                对于某些内部逻辑没有限制的任务，同时运行两个实例，结果是灾难性的。
-               所以，为了防止这种情况发生,首先暂停该任务的调度（在内部源码上的实现是将next_run_time置空）
-               在程序运行完成后，再恢复该程序的调度。
+               所以，为了防止这种情况发生,首先暂停该任务的调度（在内部源码上的实现是将 next_run_time 置空）
+               在程序运行完成后，再恢复该程序的调度。这样，可以尽最大可能避免两个实例在运行。
+               同时在配置中，max_instance=1 和 coalesce=True，这两个组合，也可以避免多个实例同时运行。
             """
 
             # 获取run之前的状态
@@ -281,7 +284,7 @@ class JobsResource(Resource):
             before_run_status = STATUS_SLEEP if next_time else STATUS_PAUSED
 
             try:
-                # 总的思想是，run前是什么状态，run之后便恢复到什么状态
+                # 总的思想是，run完成后，恢复run之前的调度状态
                 if before_run_status == STATUS_SLEEP:
                     scheduler.pause_job(job_name)
 
@@ -302,7 +305,7 @@ class JobsResource(Resource):
                 if before_run_status == STATUS_SLEEP:
                     scheduler.resume_job(job_name)  # 恢复
 
-        # 修改除job_name外的信息
+        # 更改除job_name外的 job信息
         elif action == "update":
             args_mod = parser_mod.parse_args()
 
@@ -311,19 +314,41 @@ class JobsResource(Resource):
             # 移除没有值的键值对儿
             full_data = rm_empty_kw(full_data)
 
+            changes = {}
             try:
+                # 若修改 time_data 数据，time_style 必须同时指定，若不指定后者，默认 time_style 为 date 风格
                 if "time_style" in full_data and "time_data" in full_data:
 
                     # 字符串时间变字典时间
+                    # Demo: "*/1 * * * *" → {"minute": "*/1", "hour": "*", "day": "*", "month": "*", "day_of_week": "*"}
                     trigger_data = cron_to_dict(CRON_KEYS, full_data.get("time_data"))
-                    changes = {
-                        # 时间风格
-                        "trigger": full_data.get("time_style")
-                    }
-                    changes.update(trigger_data)
+                    changes["trigger"] = full_data.get("time_style")
+                    changes.update(trigger_data)    # 时间风格
 
-                    # 修改任务时间
+                job_data = JobData.query.filter(JobData.job_name == job_name).first()
+                job_type = job_data.job_type.lower()
+
+                if job_type == JOB_TYPE_SCRIPT:
+                    pass
+                # TODO: 发现了精彩的世界，Kurt Hugo，世界真精彩！
+                if "job_cmd" in full_data and "category" not in full_data:
+                    pass
+
+
+                if changes:
+                    # 对调度涉及到的参数的修改生效
                     scheduler.modify_job(job_name, **changes)
+
+                """
+                [2020-06-10]
+                对于上传文件的分类，是按照 category 字段进行的。
+                category 改变，该任务对应的脚本也要移动到对应的文件夹中。
+                同时，执行脚本的工作目录值(cwd 参数)也要改变。
+                这样，才能保持文件所在目录和 category 是一致的，调度任务执行时才能找到要执行的脚本。
+                在查看文件内容时，才能保证能找到文件, 从而展示脚本内容。
+                """
+                if "category" in full_data:
+                    pass
 
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)
@@ -352,8 +377,8 @@ class JobsResource(Resource):
 
     def delete(self, job_name):
         """
-        删除指定job
-        :param job_name:        str/list    要删除的job
+        删除指定 job
+        :param job_name:        str/list    要删除的 job
         """
         error = ""
         try:
