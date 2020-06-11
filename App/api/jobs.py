@@ -58,6 +58,11 @@ parser_actions.add_argument("action", type=str, required=True, help="请输入�
 parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=[f"{TRIGGER_TYPE_CRON}", ],
                         help=f"请输入时间风格, [{TRIGGER_TYPE_CRON}|{TRIGGER_TYPE_DATE}|{TRIGGER_TYPE_INTERVAL}]")
 
+parser_mod.add_argument("jobType", dest="job_type", type=str,
+                        choices=[f"{JOB_TYPE_CLI}", f"{JOB_TYPE_SCRIPT}"],
+                        help=f"请输入正确的任务类型,[{JOB_TYPE_CLI}|{JOB_TYPE_SCRIPT}]")
+
+parser_mod.add_argument("jobCmd", dest="job_cmd", type=str, help="请输入任务运行命令, 如 python test.py")
 parser_mod.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
 parser_mod.add_argument("createdBy", dest="created_by", type=str, help="请输入需求人")
 parser_mod.add_argument("category", dest="category", type=str,
@@ -87,7 +92,9 @@ job_fields = {
     "jobCmd": String(attribute="job_cmd"),
     "nextRunTime": DateTime(attribute="next_run_time", dt_format="iso8601"),
     "timeStyle": String(attribute="time_style"),
-    "timeData": String(attribute="time_data")
+    "category": String(attribute="category"),
+    "file": String(attribute="file_name", default=""),
+    "desc": String(attribute="desc"),
 }
 
 jobs_fields = {
@@ -134,6 +141,9 @@ class JobsResource(Resource):
                 _info["job_cmd"] = _job.job_cmd
                 _info["time_style"] = _job.time_style
                 _info["time_data"] = _job.time_data
+                _info["category"] = _job.category
+                _info["file_name"] = _job.file_name
+                _info["desc"] = _job.desc
                 result_data.append(_info)
 
         except AttributeError as err:
@@ -147,10 +157,13 @@ class JobsResource(Resource):
             "data": result_data
         }
 
+        result_fields = deepcopy(jobs_fields)
+
         if error:
             result["error"] = error
-            jobs_fields["error"] = String
-        return marshal(result, jobs_fields)
+            result_fields["error"] = String
+
+        return marshal(result, result_fields)
 
     def post(self, job_name):
         """添加一个任务"""
@@ -191,6 +204,7 @@ class JobsResource(Resource):
                         # Demo: "../../test.py" -> "test.py"
                         new_cmd = job_args.job_cmd.replace(src_filename, s_filename)
                         full_data["job_cmd"] = sched_dict["job_cmd"] = new_cmd
+                        full_data["file_name"] = s_filename
 
                         abs_dir = FileHandler().abs_dirname(job_args.category)          # 保存目录, 绝对路径
                         _ = FileHandler.mkdir(abs_dir)                                  # 创建目录
@@ -199,9 +213,6 @@ class JobsResource(Resource):
                         # 保存文件
                         abs_filename = f"{abs_dir}/{s_filename}"
                         file_content.save(abs_filename)
-
-                else:
-                    raise Exception(MSG_CMD_VALID)
 
                 # 将 job添加到调度
                 job_handler(scheduler, sched_dict)
@@ -231,11 +242,14 @@ class JobsResource(Resource):
             "data": full_data
         }
 
+        result_fields = deepcopy(posts_fields)
+
         # 如果出现错误，则在返回结果中加上报错内容
         if error:
             result["error"] = error
+            result_fields["error"] = String
 
-        return marshal(result, posts_fields)
+        return marshal(result, result_fields)
 
     def put(self, job_name):
         """
@@ -256,6 +270,7 @@ class JobsResource(Resource):
             except Exception as err:
                 error = str(err)
                 msg = MSG_JOB_PAUSED_FAILED
+
         # 任务恢复
         elif action == "resume":
             try:
@@ -325,15 +340,17 @@ class JobsResource(Resource):
                     changes["trigger"] = full_data.get("time_style")
                     changes.update(trigger_data)    # 时间风格
 
+                # TODO: update file file_name category [2020-06-11]
                 job_data = JobData.query.filter(JobData.job_name == job_name).first()
                 job_type = job_data.job_type.lower()
 
                 if job_type == JOB_TYPE_SCRIPT:
                     pass
                 # TODO: 发现了精彩的世界，Kurt Hugo，世界真精彩！
+                # 添加一个file字段，做好相关的修改，file字段可以让移动文件的时候知道文件名称是什么
+                # 其它的逻辑优化一下，让字段传参数的时候，可以不用关心字段的增减
                 if "job_cmd" in full_data and "category" not in full_data:
                     pass
-
 
                 if changes:
                     # 对调度涉及到的参数的修改生效
@@ -383,6 +400,7 @@ class JobsResource(Resource):
         error = ""
         try:
             args = {"job_name": job_name}
+
             # 移除
             scheduler.remove_job(job_name)
 

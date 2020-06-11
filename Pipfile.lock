@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "ee4de0aec1b4f0e51d69347707978e95de2e0b9b7407764f185fae794a0ffdae"
+            "sha256": "c35a2de428fd55b1fa5bc3e93c07306dbeb5fa6c6cc3f7524a5c1e1d596ff902"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -37,13 +37,6 @@
             ],
             "version": "==3.6.3"
         },
-        "cachelib": {
-            "hashes": [
-                "sha256:1c79bb1e83b339fa4e65c8281b9e5311027540c76516ee98a66c151e629e37f1",
-                "sha256:8b889b509d372095357b8705966e1282d40835c4126d7c2b07fd414514d8ae8d"
-            ],
-            "version": "==0.1"
-        },
         "click": {
             "hashes": [
                 "sha256:d2b5255c7c6349bc1bd1e59e08cd12acbbd63ce649f2588755783aa94dfb6b1a",
@@ -65,14 +58,6 @@
             ],
             "index": "pypi",
             "version": "==1.11.0"
-        },
-        "flask-caching": {
-            "hashes": [
-                "sha256:a0356ad868b1d8ec2d0e675a6fe891c41303128f8904d5d79e180d8b3f952aff",
-                "sha256:e6ef2e2af84e13c4fd32c1839c1943a42f11b6b0fbcfdd6bf46547ea5482dbfe"
-            ],
-            "index": "pypi",
-            "version": "==1.9.0"
         },
         "flask-migrate": {
             "hashes": [
@@ -96,14 +81,6 @@
             ],
             "index": "pypi",
             "version": "==2.0.6"
-        },
-        "flask-session": {
-            "hashes": [
-                "sha256:0768e2bbf06f963ec1aa711bde7aa32dc39ff70f89b495d6db687d899eae4423",
-                "sha256:d75eb27f918421ccaf1ba86353348b84ecf07fc64ce40ff7ad05a190c4bf50f1"
-            ],
-            "index": "pypi",
-            "version": "==0.3.2"
         },
         "flask-sqlalchemy": {
             "hashes": [

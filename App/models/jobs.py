@@ -24,6 +24,7 @@ class JobData(BaseModel):
     time_data = Column(String, nullable=False, comment="运行时间")
     created_by = Column(String, nullable=False, comment="创建人")
     category = Column(String, nullable=False, comment="所属业务")
+    file_name = Column(String, comment="文件名称，job_type 为 script 时使用")
     desc = Column(String, nullable=False, comment="任务描述")
     status = relationship("JobStatus", backref="JobData", uselist=False)
 

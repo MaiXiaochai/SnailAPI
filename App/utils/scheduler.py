@@ -27,11 +27,6 @@ def log_start(job_name, cmd, model_status, model_log):
     :param model_status：   class       任务状态的model类
     :param model_log：      class       运行日志的model类
     :return:                int         返回log id，成功 > 0, 失败 -1
-
-    [2020-05-29]
-    为什么用 model_data class 而不是 model_data instance？
-    考虑到有的任务运行时间很长，model_data instance可能会占用会话资源。
-    如果有很多运行时间很长的任务（如，刷新涉及多数据的物化视图），会给数据库带来负担，甚至会话失败。
     """
     status = STATUS_RUNNING
 
@@ -69,20 +64,31 @@ def log_end(status_id, log_id, return_code, stdout, stderr, model_status, model_
     考虑到有的任务运行时间很长，model_data instance可能会占用会话资源。
     如果有很多运行时间很长的任务（如，刷新涉及多数据的物化视图），会给数据库带来负担，甚至新建会话失败。
     """
+    result = RESULT_SUCCESS if return_code == 0 else RESULT_FAILED
     job_status = model_status.query.filter(model_status.id == status_id).first()
+
+    if job_status:
+        """
+        [2020-06-11]
+        用于处理以下情形:
+        程序在运行中，执行了 DELETE /api/{job_name} 命令，
+        此时，job_status 中对应的 状态被删除，这时 job_status 为 None，None 没有属性，不能赋值，数据也不能更新
+        """
+        job_status.run_status = STATUS_SLEEP
+        job_status.run_result = result
+        job_status.end_on = func.now()
+        job_status.commit()
+
     log_run = model_log.query.filter(model_log.id == log_id).first()
 
-    result = RESULT_SUCCESS if return_code == 0 else RESULT_FAILED
-
-    job_status.run_status = STATUS_SLEEP
-    job_status.run_result = log_run.status = result
-    job_status.end_on = log_run.end_date = func.now()
-
-    log_run.return_code = return_code
-    log_run.stdout = stdout
-    log_run.stderr = stderr
-
-    return job_status.commit(), log_run.commit()
+    # 作用同`if job_status`说明
+    if log_run:
+        log_run.status = result
+        log_run.end_date = func.now()
+        log_run.return_code = return_code
+        log_run.stdout = stdout
+        log_run.stderr = stderr
+        log_run.commit()
 
 
 def exec_cmd(command, cwd=None):
@@ -105,7 +111,7 @@ def executor(cmd, job_name, cwd=None):
     with scheduler.app.app_context():
         status_id, log_id = log_start(job_name, cmd, JobStatus, RunningLog)
         _, return_code, stdout, stderr = exec_cmd(cmd, cwd)
-        _ = log_end(status_id, log_id, return_code, stdout, stderr, JobStatus, RunningLog)
+        log_end(status_id, log_id, return_code, stdout, stderr, JobStatus, RunningLog)
 
 
 def cron_to_dict(cron_keys, time_data):
@@ -148,7 +154,7 @@ def job_handler(main_scheduler, kwargs):
             kwargs=job_args,
             trigger="cron",
             **trigger_time,
-            replace_existing=True  # 如果任务已经存在则替换
+            replace_existing=True  # 在添加任务时，如果任务已经存在则替换
         )
 
     # TODO: 对 date和 interval时间风格的支持

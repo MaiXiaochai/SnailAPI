@@ -10,11 +10,10 @@
 """
 from math import log
 
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_session import Session
-from flask_caching import Cache
 from flask_apscheduler import APScheduler
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+
 from .setting import EVENT_MSG
 
 # SQLAlchemy 创建数据表，模型结构的修改，不会被映射到对应的数据表
@@ -23,7 +22,6 @@ from .setting import EVENT_MSG
 db = SQLAlchemy()
 # 生产环境不要使用迁移
 migrate = Migrate()
-cache = Cache()
 scheduler = APScheduler()
 
 
@@ -43,12 +41,11 @@ def event_listener(event):
 
 def init_ext(app):
     db.init_app(app)
-    migrate.init_app(app, db)
-    Session(app)
-    cache.init_app(app)
     scheduler.init_app(app)
+    migrate.init_app(app, db)
 
     # 这里暂时不用担心scheduler start多次的问题
     # start多次会报错"已经在运行",但不会影响已存在实例的运行
+
     scheduler.add_listener(event_listener)  # 添加监听函数，用于处理对应的调度或者job状态
     scheduler.start()

@@ -6,8 +6,6 @@ verify_ssl = true
 [dev-packages]
 flask-sqlalchemy = "*"
 flask-migrate = "*"
-flask-session = "*"
-flask-caching = "*"
 flask-apscheduler = "*"
 flask = "*"
 flask-restful = "*"
