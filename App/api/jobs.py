@@ -166,7 +166,13 @@ class JobsResource(Resource):
         return marshal(result, result_fields)
 
     def post(self, job_name):
-        """添加一个任务"""
+        """
+        TODO: [2020-06-12]
+        改为 job_type 为 script 时，job_cmd 为空时，自动根据 file 上传脚本生成 job_cmd 内容，
+        同时，也支持 job_cmd 输入命令， 检测命令中含有的脚本名称。
+        更改涉及到 JobData/RunningLog 等表，get/post/put逻辑
+        添加一个任务
+        """
         job_args = parser_jobs.parse_args()
 
         full_data = {"job_name": job_name}
@@ -197,12 +203,20 @@ class JobsResource(Resource):
                         raise Exception(MSG_FILE_EMPTY)
 
                     else:
-                        src_filename = file_content.filename
+                        src_filename = file_content.filename.lower()
                         s_filename = secure_filename(src_filename)
+
+                        if src_filename != s_filename:
+                            raise Exception("'file' 字段上传的文件，文件名包含非法字符。")
 
                         # 替换命令中的文件名称为安全的文件名称，防止意外
                         # Demo: "../../test.py" -> "test.py"
-                        new_cmd = job_args.job_cmd.replace(src_filename, s_filename)
+                        job_cmd = job_args.job_cmd
+
+                        if s_filename not in job_cmd:
+                            raise Exception("")
+
+                        new_cmd = job_cmd.replace(src_filename, s_filename)
                         full_data["job_cmd"] = sched_dict["job_cmd"] = new_cmd
                         full_data["file_name"] = s_filename
 
@@ -340,13 +354,28 @@ class JobsResource(Resource):
                     changes["trigger"] = full_data.get("time_style")
                     changes.update(trigger_data)    # 时间风格
 
-                # TODO: update file file_name category [2020-06-11]
-                job_data = JobData.query.filter(JobData.job_name == job_name).first()
-                job_type = job_data.job_type.lower()
+                elif "time_style" in full_data and "time_data" not in full_data:
+                    raise Exception("'time_data'没有值或者缺失, 该字段要与'time_style'字段同时使用")
 
-                if job_type == JOB_TYPE_SCRIPT:
-                    pass
-                # TODO: 发现了精彩的世界，Kurt Hugo，世界真精彩！
+                elif "time_style" not in full_data and "time_data" in full_data:
+                    raise Exception("'time_style'没有值或者缺失, 该字段要与'time_data'字段同时使用")
+
+                # job_type 限制不让改
+                if "job_type" in full_data:
+                    raise Exception("'job_type'字段不能修改")
+
+                job_data = JobData.query.filter(JobData.job_name == job_name).first()
+                db_file_name = job_data.file_name.lower()
+
+                if "job_cmd" in full_data and "file" in full_data and "category" in full_data:
+                    if
+
+                if "job_type" in full_data:
+                    # arg_job_type = full_data["job_type"].lower()
+
+
+
+
                 # 添加一个file字段，做好相关的修改，file字段可以让移动文件的时候知道文件名称是什么
                 # 其它的逻辑优化一下，让字段传参数的时候，可以不用关心字段的增减
                 if "job_cmd" in full_data and "category" not in full_data:

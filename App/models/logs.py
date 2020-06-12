@@ -17,7 +17,7 @@ class RunningLog(BaseModel):
     job_name = Column(String, index=True, nullable=False, comment="任务名称")
     start_date = Column(DateTime, nullable=False, comment="执行开始时间")
     end_date = Column(DateTime, comment="执行结束时间")
-    job_cmd = Column(String, nullable=False, comment="执行的命令")
+    job_cmd = Column(String, comment="执行的命令")
     category = Column(String, nullable=False, comment="所属业务")
     file_name = Column(String, comment="文件名称，job_type 为 script 时使用")
     return_code = Column(SmallInteger, index=True, comment="执行返回值, 0为成功，其它值为失败")

@@ -19,7 +19,7 @@ class JobData(BaseModel):
     """任务数据"""
     job_name = Column(String, nullable=False, unique=True, comment="任务名称")
     job_type = Column(String, nullable=False, comment="任务类型")
-    job_cmd = Column(String,  nullable=False, comment="任务运行命令")
+    job_cmd = Column(String, comment="任务运行命令")
     time_style = Column(String, nullable=False, comment="时间风格")
     time_data = Column(String, nullable=False, comment="运行时间")
     created_by = Column(String, nullable=False, comment="创建人")
