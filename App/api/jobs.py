@@ -368,11 +368,11 @@ class JobsResource(Resource):
                 db_file_name = job_data.file_name.lower()
 
                 if "job_cmd" in full_data and "file" in full_data and "category" in full_data:
-                    if
+                    pass
 
                 if "job_type" in full_data:
                     # arg_job_type = full_data["job_type"].lower()
-
+                    pass
 
 
 
