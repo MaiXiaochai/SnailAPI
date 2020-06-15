@@ -116,3 +116,11 @@ JOB_TYPE_SCRIPT = "script"
 TRIGGER_TYPE_CRON = "cron"
 TRIGGER_TYPE_DATE = "date"
 TRIGGER_TYPE_INTERVAL = "interval"
+
+# =============================[ 根据后缀判断命令的设置 ]==============================
+SUFFIX_CMD = {
+    "py": "python ",
+    "bat": "./",
+    "cmd": "./",
+    "sh": "./"
+}

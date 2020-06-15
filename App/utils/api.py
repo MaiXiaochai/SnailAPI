@@ -8,14 +8,16 @@
 @Created on : 2020/5/22 15:47
 --------------------------------------
 """
-from os import makedirs
+from os import makedirs, remove
 from os.path import join
+from shutil import move
 
 from sqlalchemy import func
+from werkzeug.utils import secure_filename
 
 from App.models import BaseModel
 from App.setting import (ACTION_CREATED, ACTION_UPDATED, ACTION_DELETED, STATUS_PAUSED, STATUS_SLEEP, STATUS_RUNNING,
-                         STATUS_DICT
+                         STATUS_DICT, SUFFIX_CMD
                          )
 
 
@@ -263,6 +265,21 @@ def get_next_time(job_list):
     return result
 
 
+def gen_cmd(filename: str) -> str:
+    """
+    根据后缀名称，生成默认命令
+    """
+    split_str = "."
+    if split_str not in filename:
+        raise Exception("gen_cmd: 所给的文件名称没有后缀")
+
+    suffix = filename.split(split_str)[-1].lower()
+    program = SUFFIX_CMD[suffix]
+    cmd = f"{program}{filename}"
+
+    return cmd
+
+
 class FileHandler:
     """
     对上传文件的处理，保存、删除等
@@ -272,9 +289,13 @@ class FileHandler:
         self.upload_dir = UPLOAD_DIR
 
     @staticmethod
+    def secure_name(name: str) -> str:
+        return secure_filename(name)
+
+    @staticmethod
     def mkdir(dir_path):
         """
-        创建文件夹，可创建多层目录
+        创建文件夹，可创建多层目录，如果目录已经存在，则直接返回 True
         :param dir_path:    str         文件夹路径
         :return:            Boolean     True: 创建成功或者已经存在，False: 创建失败
         """
@@ -286,7 +307,41 @@ class FileHandler:
         :param category:        str         所属业务
         :return:                str         abs_dir
         """
-        dir_path = join(self.upload_dir, category)
-        result = dir_path.replace("\\", "/").lower()
+        dir_path = join(self.upload_dir, category.lower())
+        result = dir_path.replace("\\", "/")
 
         return result
+
+    def save_file(self, cat: str, file) -> str:
+        """保存 file 文件"""
+        work_dir = self.abs_dirname(cat)
+        filename = self.secure_name(file.filename)
+        self.mkdir(work_dir)
+
+        # 保存文件
+        abs_filepath = f"{work_dir}/{filename}"
+        file.save(abs_filepath)
+
+        return work_dir
+
+    def move_to(self, src_cat: str, dst_cat: str, filename: str) -> str:
+        """
+        将文件 filename 从 src 移动到 dst 目录
+        """
+        src_file_path = self.abs_dirname(src_cat) + f"/{filename}"
+        dst_dir = self.abs_dirname(dst_cat)
+        dst_file_path = f"{dst_dir}/{filename}"
+
+        # 如果目标文件夹不存在，则创建
+        self.mkdir(dst_dir)
+
+        # 移动文件
+        move(src_file_path, dst_file_path)
+
+        return dst_dir
+
+    def del_file(self, cat: str, filename: str):
+        """删除文件"""
+        file_path = self.abs_dirname(cat) + f"/{filename}"
+        remove(file_path)
+
