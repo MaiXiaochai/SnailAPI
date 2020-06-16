@@ -31,7 +31,7 @@ parser_jobs = RequestParser(trim=True)
 # 继承parser_job
 parser_actions = parser_jobs.copy()
 # 继承 parser_job
-parser_mod = parser_jobs.copy()
+parser_put = parser_jobs.copy()
 # ============================================== [ parser_job ] ==============================================
 parser_jobs.add_argument("timeStyle", dest="time_style", type=str, required=True, choices=[f"{TRIGGER_TYPE_CRON}", ],
                          help=f"请输入时间风格, [{TRIGGER_TYPE_CRON}|{TRIGGER_TYPE_DATE}|{TRIGGER_TYPE_INTERVAL}]")
@@ -53,23 +53,23 @@ parser_jobs.add_argument("file", type=FileStorage, help="请上传文件", locat
 # ============================================== [ parser_action ] ==============================================
 parser_actions.add_argument("action", type=str, required=True, help="请输入操作名称")
 
-# ================================================ [ parser_mod ] ================================================
+# ================================================ [ parser_put ] ================================================
 # 5个参数 action, timeStyle, timeData, desc, category
-parser_mod.add_argument("timeStyle", dest="time_style", type=str, choices=[f"{TRIGGER_TYPE_CRON}", ],
+parser_put.add_argument("timeStyle", dest="time_style", type=str, choices=[f"{TRIGGER_TYPE_CRON}", ],
                         help=f"请输入时间风格, [{TRIGGER_TYPE_CRON}|{TRIGGER_TYPE_DATE}|{TRIGGER_TYPE_INTERVAL}]")
 
-parser_mod.add_argument("jobType", dest="job_type", type=str,
+parser_put.add_argument("jobType", dest="job_type", type=str,
                         choices=[f"{JOB_TYPE_CLI}", f"{JOB_TYPE_SCRIPT}"],
                         help=f"请输入正确的任务类型,[{JOB_TYPE_CLI}|{JOB_TYPE_SCRIPT}]")
 
-parser_mod.add_argument("jobCmd", dest="job_cmd", type=str, help="请输入任务运行命令, 如 python test.py")
-parser_mod.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
-parser_mod.add_argument("createdBy", dest="created_by", type=str, help="请输入需求人")
-parser_mod.add_argument("category", dest="category", type=str,
+parser_put.add_argument("jobCmd", dest="job_cmd", type=str, help="请输入任务运行命令, 如 python test.py")
+parser_put.add_argument("timeData", dest="time_data", type=str, help="请输入执行时间，如 0 5 * * *")
+parser_put.add_argument("createdBy", dest="created_by", type=str, help="请输入需求人")
+parser_put.add_argument("category", dest="category", type=str,
                         help="请输入任务所属业务，[mes|erp|warranty|radar|pms|stopcard|...]")
 # 文件类型
-parser_mod.add_argument("file", type=FileStorage, help="请上传文件", location=["files"])
-parser_mod.add_argument("desc", dest="desc", type=str, help="请输入任务描述")
+parser_put.add_argument("file", type=FileStorage, help="请上传文件", location=["files"])
+parser_put.add_argument("desc", dest="desc", type=str, help="请输入任务描述")
 
 # ============================================== [ parser done ] ==============================================
 post_fields = {
@@ -110,9 +110,10 @@ class JobsResource(Resource):
     """
     Job CRUD/RUN/PAUSE/RESUME
     rules:
-        1) category 字段大小写敏感，但作为文件分类目录时用小写
+        1) category 字段用小写
         2) file_name 字段大小写敏感
-        3)
+        3) job_type 字段用小写
+        4) time_style 字段小写
     """
     def get(self, job_name):
         """
@@ -185,6 +186,12 @@ class JobsResource(Resource):
 
         # 去掉没有值的键值对儿
         full_data = rm_empty_kw(full_data)
+
+        # category/time_style/job_type 都用小写
+        full_data["category"] = job_args.lower()
+        full_data["time_style"] = job_args.time_style.lower()
+        full_data["job_type"] = job_type = job_args.job_type.lower()
+
         status, msg, error = HTTP_CREATED_OK, MSG_JOB_CREATED_SUCCESS, ""
 
         try:
@@ -200,7 +207,6 @@ class JobsResource(Resource):
                     "cwd": None
                 }
 
-                job_type = job_args.job_type.lower()
                 if job_type == JOB_TYPE_SCRIPT:
 
                     if "file" not in full_data:
@@ -348,24 +354,22 @@ class JobsResource(Resource):
 
         # 更改除job_name外的 job信息
         elif action == "update":
-            args_mod = parser_mod.parse_args()
+            args_update = parser_put.parse_args()
 
             full_data = {"job_name": job_name}
-            set_model_value(full_data, args_mod)
+            set_model_value(full_data, args_update)
             # 移除没有值的键值对儿
             full_data = rm_empty_kw(full_data)
 
+            # 用于更新 job 的数据
             changes = {}
 
-            # 参数
-            kwargs = {
-                "job_name": job_name,
-                "cmd": None,
-                "cwd": None
-            }
-
             try:
-                # =========================[ 这里限定了 time_style 和 time_data 必须同时出现 ] ===============================
+                # 禁止修改 job_type
+                if "job_type" in full_data:
+                    raise Exception("'job_type'字段不能修改")
+
+                # ======================[ 这里限定了 time_style 和 time_data 必须同时出现 ] ============================
                 # 若修改 time_data 数据，time_style 必须同时指定，若不指定后者，默认 time_style 为 date 风格
                 if "time_style" in full_data and "time_data" in full_data:
 
@@ -381,75 +385,130 @@ class JobsResource(Resource):
                 elif "time_style" not in full_data and "time_data" in full_data:
                     raise Exception("'time_style'没有值或者缺失, 该字段要与'time_data'字段同时使用")
 
-                # job_type 限制不让改
-                if "job_type" in full_data:
-                    raise Exception("'job_type'字段不能修改")
+                # =========================[ 这里处理 job_cmd、file 和 category 的关系 ] ===============================
+                """
+                1> 这里是整个SnailAPI最难的地方，逻辑复杂而繁琐。所以，经多次尝试，决定像图层一样分为三层
+                    1）job 参数 kwargs
+                    2）文件的移动、删除和更新
+                    3）日志记录数据
+    
+                    这三层在代码上看起来是混乱的，就像多个图层合成一张图片一样。
+                    如果按图层的角度去看，结构比较清晰。
+                    
+                2> 另一种思想是：每个关键字段，只管处理自己相关的操作，不用全局考虑。
+                   这样，大家都处理好自己的内容，整个任务都处理好了。
+                   由简单的任务，组成复杂的任务，这才是符合计算机的逻辑，才是简单逻辑实现复杂逻辑的最优解思路。
+                   
+                   这种思想的字段处理顺序就有规定，最优顺序处理为：file > category > job_cmd
+                   数据(包括中间数据)先 保存到 full_data 库，最后再组装 kwargs
+                   
+                   full_data 就是一个流水线托盘，上边放数据, 每一步只放处理好的数据，该删除的删除。
+                   full_data 中的临时变量key 前用双单下划线表示，便于最后识别和处理, demo, full_data["__key"]
+                   整个流程处理完成后，作为最终数据
+                
+                    [2020-06-16]
+                3> 新得，多个流程控制，不要怕繁琐和运行效率低下，这其实是将大问题分解为固定条件下的诸多小问题，逐个击破的策略。
+                    这样，在写逻辑时，不容易出现考虑不到和复杂交织的情况
+                """
+                tmp_prefix = "__"
+                t_n_filename = f"{tmp_prefix}file_name"
+                t_o_filename = f"{tmp_prefix}old_filename"
+                t_cwd = f"{tmp_prefix}cwd"
+                t_cat = f"{tmp_prefix}category"
 
-                # =========================[ 这里限定了 file 和 category 必须同时出现 ] ===============================
+                fh = FileHandler()
 
-                if "file" in full_data and "category" in full_data and "job_cmd":
+                old_job_data = JobData.query.filter(JobData.job_name == job_name).first()
+                old_job_type = old_job_data.job_type
 
-                    old_job_data = JobData.query.filter(JobData.job_name == job_name).first()
+                # 执行脚本类型的任务
+                if old_job_type in (JOB_TYPE_CLI, JOB_TYPE_SCRIPT):
+
+                    old_cat = old_job_data.catergory
                     old_filename = old_job_data.file_name
-                    old_category = old_job_data.category
 
-                    fh = FileHandler()
-                    new_category = full_data.get("category")
+                    if "file" in full_data:
+                        file = full_data.get("file")
+                        new_filename = fh.secure_name(file.filename)
 
-                    # TODO:
+                        # 这里也考虑了 file_name 为空的情况，不影响之后逻辑
+                        if new_filename != old_filename:
+                            # 保存新文件
+                            fh.save_file(old_cat, new_filename)
+                            # 删除旧文件
+                            fh.del_file(old_cat, old_filename)
+                            full_data["file_name"] = new_filename
+
+                        # 传递给 category 字段处理用
+                        # 如果 new != old ,则用 new， 如果 new == old，用 new 或 old 都一样, 所以，统一用 new。
+                        full_data[t_n_filename] = new_filename
+                        full_data[t_o_filename] = file.filename
+
+                        # file 字段不需要更新到数据库，去除掉
+                        full_data.pop("file")
+
+                    if "category" in full_data:
+                        new_cat = full_data.get("category")
+
+                        if new_cat != old_cat:
+                            # 有可能更新 args 中，没有 file 字段，也就不会有 t_n_filename
+                            # 同理，jobData 中 file_name 也可能为空，也就是说，这是 job_type != "script"的任务
+                            cat_filename = ''
+                            if t_n_filename in full_data:
+                                cat_filename = full_data.get(t_n_filename)
+
+                            else:
+                                cat_filename = old_filename
+
+                            if cat_filename:
+                                # 有文件, 则将文件移动到新文件夹里
+                                _ = fh.move_to(old_cat, new_cat, cat_filename)
+
+                            else:
+                                # 针对只是修改 category 且 job_type != "script" 的任务
+                                cat_dir = fh.abs_dirname(new_cat)
+                                fh.mkdir(cat_dir)
+
+                        full_data[t_cwd] = full_data["cwd"] = fh.abs_dirname(new_cat)
+                        full_data[t_cat] = new_cat
+
                     if "job_cmd" in full_data:
-                        pass
+                        new_cmd = full_data.get("job_cmd")
+                        t_old_filename = full_data.get(t_o_filename)
 
+                        # 如果 t_o_filename 不在 job_cmd 中，替换也没问题，相当于没换
+                        if t_old_filename:
+                            t_new_filename = full_data[t_o_filename]
+                            new_cmd = new_cmd.replace(t_old_filename, t_new_filename)
 
+                        full_data["cmd"] = new_cmd
 
+                    # 去掉临时变量
+                    full_data_keys = full_data.keys()
+                    for k in full_data_keys:
+                        if k.startswith(tmp_prefix):
+                            full_data.pop(k)
 
+                # TODO: 一个文件夹内执行某个脚本
+                elif old_job_type == JOB_TYPE_DIR:
+                    raise ValueError(f"'{JOB_TYPE_DIR}'类型的命令暂时不支持")
 
+                # ========================[ 组装 job 参数, start ]=========================
+                kwargs = {
+                    "job_name": job_name,
+                    "cmd": getattr(args_update, "job_cmd"),
+                    "cwd": fh.abs_dirname(getattr(args_update, "category"))
+                }
 
-                if "file" in full_data and "category" not in full_data:
-                    raise Exception("缺少 'category' 字段，'file'和'category'字段必须同时使用")
+                full_data_keys = set(full_data.keys())
 
-                elif "file" not in full_data and "category" in full_data:
-                    raise Exception("缺少'file'字段，'category'和'file'字段必须同时使用")
+                for _k in kwargs.keys():
+                    if _k in full_data_keys:
+                        kwargs["cmd"] = full_data.pop("cmd")
 
+                changes["kwargs"] = kwargs
 
-
-
-                # if "job_cmd" not in full_data and "file" not in full_data and "category" in full_data:
-                #     new_category = full_data.get("category")
-                #
-                #     if old_category.lower() != new_category.lower():
-                #         # 移动文件
-                #         dst_dir = fh.move_to(old_category, new_category, old_filename)
-                #         job_kwargs["cwd"] = dst_dir
-                #         changes["kwargs"] = job_kwargs
-                #
-                #     elif old_category == new_category:
-                #         # 新旧名字完全相等，说明没有变化，不用更新，所以删除
-                #         full_data.pop("category")
-                #
-                # elif "job_cmd" not in full_data and "file" in full_data and "category" in full_data:
-                #     new_filename = full_data.get("file").filename
-                #     new_category = full_data.get("category")
-                #
-                #     if old_filename != new_filename:
-                #         work_dir = fh.save_file(new_category, args_mod.file)        # 保存文件
-                #         changes["cwd"] = work_dir
-                #         fh.del_file(old_category, old_filename)                     # 删除旧文件
-                #
-                #         if old_category.lower() != new_category.lower():
-                #             full_data["category"] = new_category
-
-
-
-
-
-
-
-
-                # 添加一个file字段，做好相关的修改，file字段可以让移动文件的时候知道文件名称是什么
-                # 其它的逻辑优化一下，让字段传参数的时候，可以不用关心字段的增减
-                if "job_cmd" in full_data and "category" not in full_data:
-                    pass
+                # =========================[ 组装 job 参数, end ]==========================
 
                 if changes:
                     # 对调度涉及到的参数的修改生效
@@ -463,8 +522,6 @@ class JobsResource(Resource):
                 这样，才能保持文件所在目录和 category 是一致的，调度任务执行时才能找到要执行的脚本。
                 在查看文件内容时，才能保证能找到文件, 从而展示脚本内容。
                 """
-                if "category" in full_data:
-                    pass
 
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)

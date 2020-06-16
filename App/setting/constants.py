@@ -111,7 +111,7 @@ CRON_KEYS = ["minute", "hour", "day", "month", "day_of_week"]
 # ===========================[ 调度执行命令的类型 ]=============================
 JOB_TYPE_CLI = "cli"
 JOB_TYPE_SCRIPT = "script"
-
+JOB_TYPE_DIR = "dir"
 # =============================[ job 的时间类型 ]==============================
 TRIGGER_TYPE_CRON = "cron"
 TRIGGER_TYPE_DATE = "date"
