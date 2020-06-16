@@ -563,7 +563,14 @@ class JobsResource(Resource):
             # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
             save_mod_log(ACTION_DELETED, args, ModLog, JobData)
 
-            # 删除job状态和数据
+            # 删除文件，如果有文件
+            job_data = JobData.query.filter(JobData.job_name == job_name).first()
+            cat, filename = job_data.category, job_data.file_name
+
+            if filename:
+                FileHandler().del_file(cat, filename)
+
+            # 删除jobStatus/jobData 中的数据
             del_job(job_name, JobStatus, JobData)
         except Exception as err:
             error = str(err)
