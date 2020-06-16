@@ -160,3 +160,6 @@ speed-measure-plugin*.json
 
 # migrations
 **/migrations
+
+# scripts
+**/scripts
