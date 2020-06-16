@@ -24,35 +24,19 @@ class BaseModel(db.Model):
         session.add & session.commit
         :return:        Boolean     True: 成功, False: 失败
         """
-        result = True
-        try:
-            db.session.add(self)
-            db.session.commit()
-        except Exception as err:
-            result = False
+        db.session.add(self)
+        db.session.commit()
 
-        return result
+        return True
 
     def commit(self):
-        """
-        just session.commit()
-        :return:
-        """
-        result = True
-        try:
-            db.session.commit()
-        except Exception as err:
-            result = False
+        """ Just session.commit() """
+        db.session.commit()
 
-        return result
+        return True
 
     def delete(self):
-        result = False
-        try:
-            db.session.delete(self)
-            db.session.commit()
-            result = True
-        except Exception as err:
-            pass
+        db.session.delete(self)
+        db.session.commit()
 
-        return result
+        return True

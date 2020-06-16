@@ -29,17 +29,20 @@ def log_start(job_name, cmd):
     status = STATUS_RUNNING
 
     job_data = JobData.query.filter(JobData.job_name == job_name).first()
+
     log_run = RunningLog()
-    job_status = JobStatus()
 
     log_run.job_name = job_name
     log_run.job_cmd = cmd
     log_run.category = job_data.category
+    log_run.start_date = func.now()
+    log_run.status = status
 
-    job_status.start_on = log_run.start_date = func.now()
-    job_status.run_status = log_run.status = status
+    job_status = JobStatus.query.filter(JobStatus.job_name == job_name).first()
+    job_status.start_on = func.now()
+    job_status.run_status = status
 
-    if job_status.insert_save() and log_run.insert_save():
+    if job_status.commit() and log_run.insert_save():
         return job_status.id, log_run.id
 
 

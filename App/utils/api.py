@@ -80,7 +80,7 @@ def save_mod_log(action, args, model_mod, model_data):
     t_mod = model_mod()
     executable = False
 
-    # 新创建的job
+    # 新创建的 job
     if action == ACTION_CREATED:
         set_model_value(t_mod, args)
         executable = True

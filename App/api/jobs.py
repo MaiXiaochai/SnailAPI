@@ -384,7 +384,7 @@ class JobsResource(Resource):
 
                 elif "time_style" not in full_data and "time_data" in full_data:
                     raise Exception("'time_style'没有值或者缺失, 该字段要与'time_data'字段同时使用")
-
+                print("just-1")
                 # =========================[ 这里处理 job_cmd、file 和 category 的关系 ] ===============================
                 """
                 1> 这里是整个SnailAPI最难的地方，逻辑复杂而繁琐。所以，经多次尝试，决定像图层一样分为三层
@@ -424,7 +424,7 @@ class JobsResource(Resource):
                 # 执行脚本类型的任务
                 if old_job_type in (JOB_TYPE_CLI, JOB_TYPE_SCRIPT):
 
-                    old_cat = old_job_data.catergory
+                    old_cat = old_job_data.category
                     old_filename = old_job_data.file_name
 
                     if "file" in full_data:
@@ -484,7 +484,7 @@ class JobsResource(Resource):
                         full_data["cmd"] = new_cmd
 
                     # 去掉临时变量
-                    full_data_keys = full_data.keys()
+                    full_data_keys = list(full_data.keys())
                     for k in full_data_keys:
                         if k.startswith(tmp_prefix):
                             full_data.pop(k)
@@ -501,13 +501,17 @@ class JobsResource(Resource):
                 }
 
                 full_data_keys = set(full_data.keys())
+                kwargs_eys = list(kwargs.keys())
 
-                for _k in kwargs.keys():
+                for _k in kwargs_eys:
                     if _k in full_data_keys:
-                        kwargs["cmd"] = full_data.pop("cmd")
+                        kwargs[_k] = full_data.pop(_k)
 
                 changes["kwargs"] = kwargs
 
+                print("just-2-'job_cmd'")
+                print("full_data: ", full_data)
+                print("changes: ", changes)
                 # =========================[ 组装 job 参数, end ]==========================
 
                 if changes:
@@ -522,16 +526,19 @@ class JobsResource(Resource):
                 这样，才能保持文件所在目录和 category 是一致的，调度任务执行时才能找到要执行的脚本。
                 在查看文件内容时，才能保证能找到文件, 从而展示脚本内容。
                 """
+                print("just-3-1-'modify'")
 
+                # TODO: 出错
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)
-
+                print("just-3-'up-job_data'")
                 # 将更改记录保存到日志
                 save_mod_log(ACTION_UPDATED, full_data, ModLog, JobData)
                 msg = MSG_JOB_MODIFIED_SUCCESS
-
+                print("just-4-'save_mod_log'")
             except Exception as err:
                 error = str(err)
+                print("err: ", err)
                 msg = MSG_JOB_MODIFIED_FAILED
 
         status = HTTP_OK if not error else HTTP_EXECUTE_FAILED
