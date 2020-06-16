@@ -188,7 +188,7 @@ class JobsResource(Resource):
         full_data = rm_empty_kw(full_data)
 
         # category/time_style/job_type 都用小写
-        full_data["category"] = job_args.lower()
+        full_data["category"] = job_args.category.lower()
         full_data["time_style"] = job_args.time_style.lower()
         full_data["job_type"] = job_type = job_args.job_type.lower()
 
@@ -246,11 +246,11 @@ class JobsResource(Resource):
                     # 删除 file 字段，该字段不保存到数据库
                     full_data.pop("file")
 
+                # job 数据保存到数据库, 这步在 job_handler 之前是因为执行器要查 JobData 表
+                save_job_data(full_data, JobData)
+
                 # 将 job添加到调度
                 job_handler(scheduler, sched_dict)
-
-                # job 数据保存到数据库
-                save_job_data(full_data, JobData)
 
                 # 添加job_name 到job 状态表
                 save_job_status(job_name, JobStatus)
