@@ -338,17 +338,23 @@ class FileHandler:
         """
         将文件 filename 从 src 移动到 dst 目录
         """
-        src_file_path = self.abs_dirname(src_cat) + f"/{filename}"
+        src_dir = self.abs_dirname(src_cat)
+        src_file_path = f"{src_dir}/{filename}"
+
         dst_dir = self.abs_dirname(dst_cat)
         dst_file_path = f"{dst_dir}/{filename}"
 
         # 如果目标文件夹不存在，则创建
         self.mkdir(dst_dir)
 
-        # 移动文件, 如果目标存在相同文件，则删除后再移动
+        # [2020-06-17] 移动文件, 如果目标存在相同文件，则删除后再移动
         if self.exists(dst_file_path):
             remove(dst_file_path)
         move(src_file_path, dst_file_path)
+
+        # [2020-06-17] 如果源目录为空，则删除
+        if self.is_dir_empty(src_dir):
+            self.rm_dir(src_dir)
 
         return dst_dir
 

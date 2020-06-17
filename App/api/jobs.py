@@ -198,17 +198,19 @@ class JobsResource(Resource):
             _exist = scheduler.get_job(job_name)
             _exist_cat = _exist_file_name = False
 
-            _cat = full_data.get("category").lower()
+            _arg_cat = full_data.get("category").lower()
+            _arg_file_name = ""
 
             if job_data:
-                _exist_cat = _cat == job_data.category
+                _exist_cat = _arg_cat == job_data.category
 
-            if "file" in full_data:
-                _filename = full_data.get("file").filename
-                _exist_file_name = fh.secure_name(_filename) == job_data.file_name
+                if "file" in full_data:
+                    _filename = full_data.get("file").filename
+                    _arg_file_name = fh.secure_name(_filename)
+                    _exist_file_name = _arg_file_name == job_data.file_name
 
-            if not (_exist_cat and _exist_file_name):
-                raise Exception(f"Category'{_cat}'下已经存在 文件'{job_data.file_name}'。")
+            if _exist_cat and _exist_file_name:
+                raise Exception(f"Category'{_arg_cat}'下已经存在 文件'{_arg_file_name}'。")
 
             if not _exist:
                 # 准备添加到调度的数据
