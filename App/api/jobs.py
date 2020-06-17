@@ -454,6 +454,9 @@ class JobsResource(Resource):
                 # 执行脚本类型的任务
                 if old_job_type in (JOB_TYPE_CLI, JOB_TYPE_SCRIPT):
 
+                    if old_job_type != JOB_TYPE_SCRIPT and "file" in full_data:
+                        raise Exception(f"jobType 非'{JOB_TYPE_SCRIPT}'时，不能上传文件")
+
                     old_cat = old_job_data.category
                     old_filename = old_job_data.file_name
 
@@ -510,6 +513,7 @@ class JobsResource(Resource):
 
                             else:
                                 # 针对只是修改 category 且 job_type != "script" 的任务
+                                # 如果目录不存在则创建
                                 cat_dir = fh.abs_dirname(new_cat)
                                 fh.mkdir(cat_dir)
 
@@ -623,6 +627,7 @@ class JobsResource(Resource):
         """
         error = ""
         is_exist = scheduler.get_job(job_name)
+        fh = FileHandler()
 
         try:
             if is_exist:
@@ -633,12 +638,16 @@ class JobsResource(Resource):
                 # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
                 save_mod_log(ACTION_DELETED, args, ModLog, JobData)
 
-                # 删除文件，如果有文件
+                # 如果有文件, 删除文件
                 job_data = JobData.query.filter(JobData.job_name == job_name).first()
                 cat, filename = job_data.category, job_data.file_name
 
                 if filename:
-                    FileHandler().del_file(cat, filename)
+                    fh.del_file(cat, filename)
+
+                # 如果目录为空，删除目录
+                wk_dir = fh.abs_dirname(cat)
+                fh.rm_dir(wk_dir)
 
                 # 删除jobStatus/jobData 中的数据
                 del_job(job_name, JobStatus, JobData)
