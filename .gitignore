@@ -75,7 +75,7 @@ local_settings.py
 # pyenv
 .python-version
 
-# celery beat schedule file
+# celery beat schedule file_obj
 celerybeat-schedule
 
 # SageMath parsed files

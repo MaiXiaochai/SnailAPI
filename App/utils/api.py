@@ -8,8 +8,8 @@
 @Created on : 2020/5/22 15:47
 --------------------------------------
 """
-from os import makedirs, remove
-from os.path import join
+from os import makedirs, remove, listdir, rmdir
+from os.path import join, exists
 from shutil import move
 
 from sqlalchemy import func
@@ -280,6 +280,16 @@ def gen_cmd(filename: str) -> str:
     return cmd
 
 
+def to_lower(d: dict, args: list):
+    """将字典中指定的值最小化"""
+    if isinstance(d, dict):
+        for k in args:
+            if k in d:
+                d[k] = d[k].lower()
+    else:
+        raise
+
+
 class FileHandler:
     """
     对上传文件的处理，保存、删除等
@@ -312,15 +322,15 @@ class FileHandler:
 
         return result
 
-    def save_file(self, cat: str, file) -> str:
-        """保存 file 文件"""
+    def save_file(self, cat: str, file_obj) -> str:
+        """保存 file_obj 文件"""
         work_dir = self.abs_dirname(cat)
-        filename = self.secure_name(file.filename)
+        filename = self.secure_name(file_obj.filename)
         self.mkdir(work_dir)
 
         # 保存文件
         abs_filepath = f"{work_dir}/{filename}"
-        file.save(abs_filepath)
+        file_obj.save(abs_filepath)
 
         return work_dir
 
@@ -335,13 +345,42 @@ class FileHandler:
         # 如果目标文件夹不存在，则创建
         self.mkdir(dst_dir)
 
-        # 移动文件
+        # 移动文件, 如果目标存在相同文件，则删除后再移动
+        if self.exists(dst_file_path):
+            remove(dst_file_path)
         move(src_file_path, dst_file_path)
 
         return dst_dir
 
     def del_file(self, cat: str, filename: str):
-        """删除文件"""
-        file_path = self.abs_dirname(cat) + f"/{filename}"
-        remove(file_path)
+        """删除文件, category 专用"""
+        work_dir = self.abs_dirname(cat)
+        file_path = f"{work_dir}/{filename}"
 
+        if self.exists(file_path):
+            remove(file_path)
+
+        # 如果目录是空的，则删除目录，这里指的是名为 {cat} 的目录
+        self.rm_dir(work_dir)
+
+    def rm_dir(self, path: str) -> bool:
+        """
+        category 目录专用
+        如果目录是空的，删除末尾的空目录
+        非递归删除
+        """
+        if self.exists(path) and self.is_dir_empty(path) and len(path.strip()) > len(self.upload_dir):
+            rmdir(path)
+
+        else:
+            raise Exception("目录(文件夹)删除失败.")
+        return True
+
+    @staticmethod
+    def is_dir_empty(path: str) -> bool:
+        """判断目录(/文件夹)是否为空"""
+        return len(listdir(path)) == 0
+
+    def exists(self, path: str) -> bool:
+        """文件或者目录是否存在"""
+        return exists(path)

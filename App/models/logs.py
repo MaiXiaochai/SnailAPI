@@ -20,10 +20,10 @@ class RunningLog(BaseModel):
     job_cmd = Column(String, comment="执行的命令")
     category = Column(String, nullable=False, comment="所属业务")
     file_name = Column(String, comment="文件名称，job_type 为 script 时使用")
-    return_code = Column(SmallInteger, index=True, comment="执行返回值, 0为成功，其它值为失败")
+    return_code = Column(SmallInteger, comment="执行返回值, 0为成功，其它值为失败")
     stdout = Column(Text, comment="命令执行时的输出内容")
     stderr = Column(Text, comment="命令执行出错是的输出内容")
-    status = Column(String(1), comment="任务运行状态")
+    status = Column(String(1), index=True, comment="任务运行状态")
 
 
 class ModLog(BaseModel):

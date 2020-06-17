@@ -15,14 +15,13 @@ from flask_restful import Resource, marshal
 from flask_restful.fields import Integer, String, DateTime, Nested, List
 from flask_restful.reqparse import RequestParser
 from werkzeug.datastructures import FileStorage
-from werkzeug.utils import secure_filename
 
 from App.extensions import scheduler
 from App.models.jobs import JobData, JobStatus
 from App.models.logs import ModLog
 from App.setting import *
 from App.utils import (set_model_value, job_handler, get_next_time, save_job_data, save_job_status, up_job_status,
-                       save_mod_log, cron_to_dict, up_job_data, del_job, rm_empty_kw, FileHandler, gen_cmd
+                       save_mod_log, cron_to_dict, up_job_data, del_job, rm_empty_kw, FileHandler, gen_cmd, to_lower
                        )
 
 # Request 解析参数。自动去除值两边空格
@@ -188,14 +187,28 @@ class JobsResource(Resource):
         full_data = rm_empty_kw(full_data)
 
         # category/time_style/job_type 都用小写
-        full_data["category"] = job_args.category.lower()
-        full_data["time_style"] = job_args.time_style.lower()
-        full_data["job_type"] = job_type = job_args.job_type.lower()
+        to_lower(full_data, LOWER_KEYS)
 
         status, msg, error = HTTP_CREATED_OK, MSG_JOB_CREATED_SUCCESS, ""
 
+        fh = FileHandler()
+        job_data = JobData.query.filter(JobData.job_name == job_name).first()
+
         try:
             _exist = scheduler.get_job(job_name)
+            _exist_cat = _exist_file_name = False
+
+            _cat = full_data.get("category").lower()
+
+            if job_data:
+                _exist_cat = _cat == job_data.category
+
+            if "file" in full_data:
+                _filename = full_data.get("file").filename
+                _exist_file_name = fh.secure_name(_filename) == job_data.file_name
+
+            if not (_exist_cat and _exist_file_name):
+                raise Exception(f"Category'{_cat}'下已经存在 文件'{job_data.file_name}'。")
 
             if not _exist:
                 # 准备添加到调度的数据
@@ -206,8 +219,18 @@ class JobsResource(Resource):
                     "time_data": job_args.time_data,
                     "cwd": None
                 }
+                job_type = full_data["job_type"]
 
-                if job_type == JOB_TYPE_SCRIPT:
+                # 纯粹执行命令
+                if job_type == JOB_TYPE_CLI:
+                    if "file" in full_data:
+                        raise Exception("jobType 为'cli'时，不需要'file' 字段。")
+
+                    work_dir = fh.abs_dirname(full_data["category"])    # 执行脚本或者命令时切换到的目录，即工作目录
+                    work_dir = fh.mkdir(work_dir)                       # 创建目录
+                    sched_dict["cwd"] = work_dir
+
+                elif job_type == JOB_TYPE_SCRIPT:
 
                     if "file" not in full_data:
                         raise Exception("'file'字段为空。")
@@ -216,7 +239,7 @@ class JobsResource(Resource):
                     # Demo: "../../test.py" -> "test.py"
                     file_content = job_args.file
                     filename_src = file_content.filename
-                    filename_secure = FileHandler.secure_name(filename_src)
+                    filename_secure = fh.secure_name(filename_src)
 
                     full_data["file_name"] = filename_secure
 
@@ -226,7 +249,7 @@ class JobsResource(Resource):
                         job_cmd = job_args.job_cmd
     
                         if filename_src not in job_cmd:
-                            raise Exception("'job_cmd'命令中未发现'file'中的文件名")
+                            raise Exception("'jobCmd'命令中未发现'file'中的文件名")
                         else:
                             job_cmd = job_cmd.replace(filename_src, filename_secure)
 
@@ -238,13 +261,13 @@ class JobsResource(Resource):
                         full_data["job_cmd"] = sched_dict["job_cmd"] = cmd
 
                     # ===================[ 无论有没有 job_cmd 都要进行的操作, start ]====================
-                    work_dir = FileHandler().save_file(job_args.category, job_args.file)
+                    work_dir = fh.save_file(job_args.category, job_args.file)
                     sched_dict["cwd"] = work_dir
                     # ====================[ 无论有没有 job_cmd 都要进行的操作, end ]=====================
 
-                if "file" in full_data:
-                    # 删除 file 字段，该字段不保存到数据库
-                    full_data.pop("file")
+                    if "file" in full_data:
+                        # 删除 file 字段，该字段不保存到数据库
+                        full_data.pop("file")
 
                 # job 数据保存到数据库, 这步在 job_handler 之前是因为执行器要查 JobData 表
                 save_job_data(full_data, JobData)
@@ -280,6 +303,7 @@ class JobsResource(Resource):
         if error:
             result["error"] = error
             result_fields["error"] = String
+            result_fields.pop("data")
 
         return marshal(result, result_fields)
 
@@ -361,13 +385,16 @@ class JobsResource(Resource):
             # 移除没有值的键值对儿
             full_data = rm_empty_kw(full_data)
 
+            # 对指定的键值小写
+            to_lower(full_data, LOWER_KEYS)
+
             # 用于更新 job 的数据
             changes = {}
 
             try:
                 # 禁止修改 job_type
                 if "job_type" in full_data:
-                    raise Exception("'job_type'字段不能修改")
+                    raise Exception("'jobType'字段不能修改")
 
                 # ======================[ 这里限定了 time_style 和 time_data 必须同时出现 ] ============================
                 # 若修改 time_data 数据，time_style 必须同时指定，若不指定后者，默认 time_style 为 date 风格
@@ -380,11 +407,11 @@ class JobsResource(Resource):
                     changes.update(trigger_data)    # 时间风格
 
                 elif "time_style" in full_data and "time_data" not in full_data:
-                    raise Exception("'time_data'没有值或者缺失, 该字段要与'time_style'字段同时使用")
+                    raise Exception("'timeData'没有值或者缺失, 该字段要与'timeStyle'字段同时使用")
 
                 elif "time_style" not in full_data and "time_data" in full_data:
-                    raise Exception("'time_style'没有值或者缺失, 该字段要与'time_data'字段同时使用")
-                print("just-1")
+                    raise Exception("'timeStyle'没有值或者缺失, 该字段要与'timeData'字段同时使用")
+
                 # =========================[ 这里处理 job_cmd、file 和 category 的关系 ] ===============================
                 """
                 1> 这里是整个SnailAPI最难的地方，逻辑复杂而繁琐。所以，经多次尝试，决定像图层一样分为三层
@@ -406,14 +433,15 @@ class JobsResource(Resource):
                    full_data 中的临时变量key 前用双单下划线表示，便于最后识别和处理, demo, full_data["__key"]
                    整个流程处理完成后，作为最终数据
                 
-                    [2020-06-16]
-                3> 新得，多个流程控制，不要怕繁琐和运行效率低下，这其实是将大问题分解为固定条件下的诸多小问题，逐个击破的策略。
-                    这样，在写逻辑时，不容易出现考虑不到和复杂交织的情况
+                    [2020-06-16] 采用 2> 方案
+                3> 心得，多个流程控制，不要怕繁琐和运行效率低下，这其实是将大问题分解为固定条件下的诸多小问题，逐个击破的策略。
+                   这样，在写逻辑时，不容易出现考虑不到和复杂交织的情况
                 """
                 tmp_prefix = "__"
-                t_n_filename = f"{tmp_prefix}file_name"
-                t_o_filename = f"{tmp_prefix}old_filename"
+                t_secure_filename = f"{tmp_prefix}file_name"
+                t_insecure_filename = f"{tmp_prefix}old_filename"
                 t_cwd = f"{tmp_prefix}cwd"
+                t_cmd = f"{tmp_prefix}cmd"
                 t_cat = f"{tmp_prefix}category"
 
                 fh = FileHandler()
@@ -431,18 +459,32 @@ class JobsResource(Resource):
                         file = full_data.get("file")
                         new_filename = fh.secure_name(file.filename)
 
-                        # 这里也考虑了 file_name 为空的情况，不影响之后逻辑
-                        if new_filename != old_filename:
-                            # 保存新文件
-                            fh.save_file(old_cat, new_filename)
-                            # 删除旧文件
+                        # =============================[ 处理 cmd: start ]==============================
+                        old_cmd = old_job_data.job_cmd
+                        if old_filename:
+                            if old_filename in old_cmd:
+                                new_cmd = old_cmd.replace(old_filename, new_filename)
+                            else:
+                                new_cmd = gen_cmd(new_filename)
+                        else:
+                            new_cmd = gen_cmd(new_filename)
+
+                        full_data["cmd"] = full_data[t_cmd] = new_cmd
+                        # ==============================[ 处理 cmd: end ]================================
+
+                        # 删除旧文件
+                        if old_filename:
                             fh.del_file(old_cat, old_filename)
-                            full_data["file_name"] = new_filename
+
+                        # 保存新文件
+                        fh.save_file(old_cat, file)
+
+                        full_data["file_name"] = new_filename
 
                         # 传递给 category 字段处理用
                         # 如果 new != old ,则用 new， 如果 new == old，用 new 或 old 都一样, 所以，统一用 new。
-                        full_data[t_n_filename] = new_filename
-                        full_data[t_o_filename] = file.filename
+                        full_data[t_secure_filename] = new_filename
+                        full_data[t_insecure_filename] = file.filename
 
                         # file 字段不需要更新到数据库，去除掉
                         full_data.pop("file")
@@ -451,11 +493,11 @@ class JobsResource(Resource):
                         new_cat = full_data.get("category")
 
                         if new_cat != old_cat:
-                            # 有可能更新 args 中，没有 file 字段，也就不会有 t_n_filename
+                            # 有可能更新 args 中，没有 file 字段，也就不会有 t_secure_filename
                             # 同理，jobData 中 file_name 也可能为空，也就是说，这是 job_type != "script"的任务
-                            cat_filename = ''
-                            if t_n_filename in full_data:
-                                cat_filename = full_data.get(t_n_filename)
+
+                            if t_secure_filename in full_data:
+                                cat_filename = full_data.get(t_secure_filename)
 
                             else:
                                 cat_filename = old_filename
@@ -469,19 +511,36 @@ class JobsResource(Resource):
                                 cat_dir = fh.abs_dirname(new_cat)
                                 fh.mkdir(cat_dir)
 
-                        full_data[t_cwd] = full_data["cwd"] = fh.abs_dirname(new_cat)
+                            full_data["cwd"] = fh.abs_dirname(new_cat)
+
+                        full_data[t_cwd] = fh.abs_dirname(new_cat)
                         full_data[t_cat] = new_cat
 
                     if "job_cmd" in full_data:
                         new_cmd = full_data.get("job_cmd")
-                        t_old_filename = full_data.get(t_o_filename)
+                        filename_insecure = full_data.get(t_insecure_filename)
 
-                        # 如果 t_o_filename 不在 job_cmd 中，替换也没问题，相当于没换
-                        if t_old_filename:
-                            t_new_filename = full_data[t_o_filename]
-                            new_cmd = new_cmd.replace(t_old_filename, t_new_filename)
+                        # 如果 t_insecure_filename 不在 job_cmd 中，替换也没问题，相当于没换
+                        if filename_insecure:
+                            filename_secure = full_data[t_secure_filename]
 
-                        full_data["cmd"] = new_cmd
+                            if filename_insecure not in new_cmd:
+                                raise Exception(f"file'{filename_insecure}' 不在jobCmd`{new_cmd}`中。")
+                            else:
+                                new_cmd = new_cmd.replace(filename_insecure, filename_secure)
+
+                        else:
+                            # # 这里的完整分分支结构，是为了让思考难度降低
+                            # # 没有文件就用原始的命令
+                            # # new_cmd = new_cmd
+                            pass
+                        full_data["job_cmd"] = full_data["cmd"] = new_cmd
+
+                    else:
+                        # # 这里的完整分分支结构，是为了让思考难度降低
+                        # # 没有 job_cmd 就用之前 file 处理中得到的 cmd 和 t_cmd
+                        if "cmd" in full_data:
+                            full_data["job_cmd"] = full_data["cmd"]
 
                     # 去掉临时变量
                     full_data_keys = list(full_data.keys())
@@ -489,29 +548,32 @@ class JobsResource(Resource):
                         if k.startswith(tmp_prefix):
                             full_data.pop(k)
 
-                # TODO: 一个文件夹内执行某个脚本
+                # =========================[ 一个文件夹内执行某个脚本 ]=========================
                 elif old_job_type == JOB_TYPE_DIR:
-                    raise ValueError(f"'{JOB_TYPE_DIR}'类型的命令暂时不支持")
+                    # TODO:
+                    raise ValueError(f"'jobType'为'{JOB_TYPE_DIR}'类型的命令暂时不支持")
 
                 # ========================[ 组装 job 参数, start ]=========================
-                kwargs = {
-                    "job_name": job_name,
-                    "cmd": getattr(args_update, "job_cmd"),
-                    "cwd": fh.abs_dirname(getattr(args_update, "category"))
-                }
-
                 full_data_keys = set(full_data.keys())
-                kwargs_eys = list(kwargs.keys())
 
-                for _k in kwargs_eys:
-                    if _k in full_data_keys:
-                        kwargs[_k] = full_data.pop(_k)
+                if "cmd" in full_data_keys or "cwd" in full_data_keys:
+                    kwargs = {
+                        "job_name": job_name,
+                        "cmd": full_data.get("cmd") or old_job_data.job_cmd,
+                        "cwd": full_data.get("cwd") or fh.abs_dirname(old_job_data.category)
+                    }
 
-                changes["kwargs"] = kwargs
+                    kwargs_eys = list(kwargs.keys())
 
-                print("just-2-'job_cmd'")
-                print("full_data: ", full_data)
-                print("changes: ", changes)
+                    for _k in kwargs_eys:
+                        if _k != "job_name" and _k in full_data_keys:
+                            kwargs[_k] = full_data.pop(_k)
+
+                        elif _k == "job_name":
+                            continue
+
+                    changes["kwargs"] = kwargs
+
                 # =========================[ 组装 job 参数, end ]==========================
 
                 if changes:
@@ -526,19 +588,16 @@ class JobsResource(Resource):
                 这样，才能保持文件所在目录和 category 是一致的，调度任务执行时才能找到要执行的脚本。
                 在查看文件内容时，才能保证能找到文件, 从而展示脚本内容。
                 """
-                print("just-3-1-'modify'")
 
-                # TODO: 出错
                 # 更新该job在JobData中的元数据
                 up_job_data(full_data, JobData)
-                print("just-3-'up-job_data'")
+
                 # 将更改记录保存到日志
                 save_mod_log(ACTION_UPDATED, full_data, ModLog, JobData)
                 msg = MSG_JOB_MODIFIED_SUCCESS
-                print("just-4-'save_mod_log'")
+
             except Exception as err:
                 error = str(err)
-                print("err: ", err)
                 msg = MSG_JOB_MODIFIED_FAILED
 
         status = HTTP_OK if not error else HTTP_EXECUTE_FAILED

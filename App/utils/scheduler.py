@@ -55,12 +55,11 @@ def log_end(status_id, log_id, return_code, stdout, stderr):
     :param stdout:          str         正常结束时的输出
     :param stderr:          str         运行出错时的输出
     :return:                Boolean     True：成功，False：失败
-
-    [2020-05-29]
-    为什么用 model_data class 而不是 model_data instance？
-    考虑到有的任务运行时间很长，model_data instance可能会占用会话资源。
-    如果有很多运行时间很长的任务（如，刷新涉及多数据的物化视图），会给数据库带来负担，甚至新建会话失败。
     """
+    # [2020-06-17]
+    # RunningLog 中要保存的额外的值，这些值来自 JobData
+    running_log_keys = ["category", "job_cmd"]
+
     result = RESULT_SUCCESS if return_code == 0 else RESULT_FAILED
     job_status = JobStatus.query.filter(JobStatus.id == status_id).first()
 
@@ -77,14 +76,22 @@ def log_end(status_id, log_id, return_code, stdout, stderr):
         job_status.commit()
 
     log_run = RunningLog.query.filter(RunningLog.id == log_id).first()
-
     # 作用同`if job_status`说明
     if log_run:
+        job_name = log_run.job_name
+        job_data = JobData.query.filter(JobData.job_name == job_name).first()
+
         log_run.status = result
         log_run.end_date = func.now()
         log_run.return_code = return_code
         log_run.stdout = stdout
         log_run.stderr = stderr
+
+        # [2020-06-17] RunningLog 中保存额外的值
+        for k in running_log_keys:
+            if hasattr(job_data, k):
+                setattr(log_run, k, getattr(job_data, k))
+
         log_run.commit()
 
 
