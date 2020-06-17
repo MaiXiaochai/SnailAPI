@@ -378,8 +378,6 @@ class FileHandler:
         if self.exists(path) and self.is_dir_empty(path) and len(path.strip()) > len(self.upload_dir):
             rmdir(path)
 
-        else:
-            raise Exception("目录(文件夹)删除失败.")
         return True
 
     @staticmethod

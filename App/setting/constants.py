@@ -48,6 +48,7 @@ MSG_JOB_EXECUTE_FAILED = "任务执行失败"
 
 MSG_JOB_DELETED_SUCCESS = "任务删除成功"
 MSG_JOB_DELETED_FAILED = "任务删除失败"
+MSG_JOB_DELETED_AGAIN = "任务已经删除，多次删除也只是删除一次，干点别的吧，亲"
 
 # =============================[ 任务运行状态 ]=============================
 STATUS_SLEEP = "S"      # SLEEP     任务已添加等待运行

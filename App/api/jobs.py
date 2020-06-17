@@ -622,28 +622,33 @@ class JobsResource(Resource):
         :param job_name:        str/list    要删除的 job
         """
         error = ""
+        is_exist = scheduler.get_job(job_name)
+
         try:
-            args = {"job_name": job_name}
+            if is_exist:
+                args = {"job_name": job_name}
+                # 移除
+                scheduler.remove_job(job_name)
 
-            # 移除
-            scheduler.remove_job(job_name)
+                # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
+                save_mod_log(ACTION_DELETED, args, ModLog, JobData)
 
-            # 注意这里的顺序，先添加移除日志，再移除，否则移除日志找不到元数据
-            save_mod_log(ACTION_DELETED, args, ModLog, JobData)
+                # 删除文件，如果有文件
+                job_data = JobData.query.filter(JobData.job_name == job_name).first()
+                cat, filename = job_data.category, job_data.file_name
 
-            # 删除文件，如果有文件
-            job_data = JobData.query.filter(JobData.job_name == job_name).first()
-            cat, filename = job_data.category, job_data.file_name
+                if filename:
+                    FileHandler().del_file(cat, filename)
 
-            if filename:
-                FileHandler().del_file(cat, filename)
+                # 删除jobStatus/jobData 中的数据
+                del_job(job_name, JobStatus, JobData)
 
-            # 删除jobStatus/jobData 中的数据
-            del_job(job_name, JobStatus, JobData)
         except Exception as err:
             error = str(err)
 
         status, msg = (HTTP_EXECUTE_FAILED, MSG_JOB_DELETED_FAILED) if error else (HTTP_OK, MSG_JOB_DELETED_SUCCESS)
+        msg = MSG_JOB_DELETED_AGAIN if not is_exist else msg
+
         result = {
             "status": status,
             "msg": msg,
