@@ -16,6 +16,7 @@ from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
 from App.models import BaseModel
+from App.models.jobs import JobData
 from App.setting import (ACTION_CREATED, ACTION_UPDATED, ACTION_DELETED, STATUS_PAUSED, STATUS_SLEEP, STATUS_RUNNING,
                          STATUS_DICT, SUFFIX_CMD
                          )
@@ -334,9 +335,10 @@ class FileHandler:
 
         return work_dir
 
-    def move_to(self, src_cat: str, dst_cat: str, filename: str) -> str:
+    def move_to(self, src_cat: str, dst_cat: str, filename: str, total_category: int) -> str:
         """
         将文件 filename 从 src 移动到 dst 目录
+        如果源文件夹没有 job 再使用(包括 cwd)，则删除
         """
         src_dir = self.abs_dirname(src_cat)
         src_file_path = f"{src_dir}/{filename}"
@@ -352,8 +354,9 @@ class FileHandler:
             remove(dst_file_path)
         move(src_file_path, dst_file_path)
 
-        # [2020-06-17] 如果源目录为空，则删除
-        if self.is_dir_empty(src_dir):
+        # [2020-06-17] [2020-07-01]
+        # 如果源目录为空并且数据库中 category 字段 该分类的数量 < 2 (说明除了自己没有别的脚本在用这个文件夹)，则删除
+        if self.is_dir_empty(src_dir) and total_category < 2:
             self.rm_dir(src_dir)
 
         return dst_dir
@@ -366,7 +369,7 @@ class FileHandler:
         if self.exists(file_path):
             remove(file_path)
 
-        # 如果目录是空的，则删除目录，这里指的是名为 {cat} 的目录
+        # 如果目录是空的，则删除目录，这里指的是名为 ${cat} 的目录
         self.rm_dir(work_dir)
 
     def rm_dir(self, path: str) -> bool:

@@ -11,7 +11,7 @@
 from flask import jsonify
 from flask_restful import Resource
 
-from App.setting import HTTP_OK, envs
+from App.setting import HTTP_OK
 
 
 class IntroResource(Resource):

@@ -210,7 +210,7 @@ class JobsResource(Resource):
                     _exist_file_name = _arg_file_name == job_data.file_name
 
             if _exist_cat and _exist_file_name:
-                raise Exception(f"Category'{_arg_cat}'下已经存在 文件'{_arg_file_name}'。")
+                raise Exception(f"Category'{_arg_cat}'下已经存在 文件'{_arg_file_name}'")
 
             if not _exist:
                 # 准备添加到调度的数据
@@ -227,10 +227,6 @@ class JobsResource(Resource):
                 if job_type == JOB_TYPE_CLI:
                     if "file" in full_data:
                         raise Exception("jobType 为'cli'时，不需要'file' 字段。")
-
-                    work_dir = fh.abs_dirname(full_data["category"])    # 执行脚本或者命令时切换到的目录，即工作目录
-                    work_dir = fh.mkdir(work_dir)                       # 创建目录
-                    sched_dict["cwd"] = work_dir
 
                 elif job_type == JOB_TYPE_SCRIPT:
 
@@ -249,7 +245,7 @@ class JobsResource(Resource):
                     # 与这里相反的情况是 job_cmd 没有值，而 file 有值，通过 file 生成 job_cmd
                     if "job_cmd" in full_data:
                         job_cmd = job_args.job_cmd
-    
+
                         if filename_src not in job_cmd:
                             raise Exception("'jobCmd'命令中未发现'file'中的文件名")
                         else:
@@ -416,17 +412,9 @@ class JobsResource(Resource):
 
                 # =========================[ 这里处理 job_cmd、file 和 category 的关系 ] ===============================
                 """
-                1> 这里是整个SnailAPI最难的地方，逻辑复杂而繁琐。所以，经多次尝试，决定像图层一样分为三层
-                    1）job 参数 kwargs
-                    2）文件的移动、删除和更新
-                    3）日志记录数据
-    
-                    这三层在代码上看起来是混乱的，就像多个图层合成一张图片一样。
-                    如果按图层的角度去看，结构比较清晰。
-                    
-                2> 另一种思想是：每个关键字段，只管处理自己相关的操作，不用全局考虑。
+                1> 思想是：每个关键字段，只管处理自己相关的操作，不用全局考虑。
                    这样，大家都处理好自己的内容，整个任务都处理好了。
-                   由简单的任务，组成复杂的任务，这才是符合计算机的逻辑，才是简单逻辑实现复杂逻辑的最优解思路。
+                   由简单的任务组成复杂的任务，这才是符合计算机的逻辑，才是简单逻辑实现复杂逻辑的最优解思路。
                    
                    这种思想的字段处理顺序就有规定，最优顺序处理为：file > category > job_cmd
                    数据(包括中间数据)先 保存到 full_data 库，最后再组装 kwargs
@@ -435,8 +423,8 @@ class JobsResource(Resource):
                    full_data 中的临时变量key 前用双单下划线表示，便于最后识别和处理, demo, full_data["__key"]
                    整个流程处理完成后，作为最终数据
                 
-                    [2020-06-16] 采用 2> 方案
-                3> 心得，多个流程控制，不要怕繁琐和运行效率低下，这其实是将大问题分解为固定条件下的诸多小问题，逐个击破的策略。
+                    [2020-06-16] 采用 1> 方案
+                2> 心得，多个流程控制，不要怕繁琐和运行效率低下，这其实是将大问题分解为固定条件下的诸多小问题，逐个击破的策略。
                    这样，在写逻辑时，不容易出现考虑不到和复杂交织的情况
                 """
                 tmp_prefix = "__"
@@ -507,15 +495,24 @@ class JobsResource(Resource):
                             else:
                                 cat_filename = old_filename
 
+                            cats = JobData.query.filter(JobData.category == old_cat).all()
+                            total_cats = len(cats) if cats else 0
+
                             if cat_filename:
                                 # 有文件, 则将文件移动到新文件夹里
-                                _ = fh.move_to(old_cat, new_cat, cat_filename)
+                                _ = fh.move_to(old_cat, new_cat, cat_filename, total_cats)
 
                             else:
                                 # 针对只是修改 category 且 job_type != "script" 的任务
                                 # 如果目录不存在则创建
                                 cat_dir = fh.abs_dirname(new_cat)
                                 fh.mkdir(cat_dir)
+
+                                # [2020-07-01]
+                                # 如果只有一个 job 在使用 old_cat 文件夹(也就是自己)，那么删除
+                                if total_cats < 2:
+                                    wk_dir = fh.abs_dirname(old_cat)
+                                    fh.rm_dir(wk_dir)
 
                             full_data["cwd"] = fh.abs_dirname(new_cat)
 
@@ -556,7 +553,7 @@ class JobsResource(Resource):
 
                 # =========================[ 一个文件夹内执行某个脚本 ]=========================
                 elif old_job_type == JOB_TYPE_DIR:
-                    # TODO:
+                    # TODO: 支持文件夹上传和更新
                     raise ValueError(f"'jobType'为'{JOB_TYPE_DIR}'类型的命令暂时不支持")
 
                 # ========================[ 组装 job 参数, start ]=========================
@@ -645,9 +642,13 @@ class JobsResource(Resource):
                 if filename:
                     fh.del_file(cat, filename)
 
-                # 如果目录为空，删除目录
-                wk_dir = fh.abs_dirname(cat)
-                fh.rm_dir(wk_dir)
+                # 如果目录为空, 并且没有其他job 在使用这个目录，删除目录
+                cats = JobData.query.filter(JobData.category == cat).all()
+                total_cats = len(cats) if cats else 0
+
+                if total_cats < 2:
+                    wk_dir = fh.abs_dirname(cat)
+                    fh.rm_dir(wk_dir)
 
                 # 删除jobStatus/jobData 中的数据
                 del_job(job_name, JobStatus, JobData)
