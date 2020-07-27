@@ -60,6 +60,12 @@ class BaseConfig:
                             这个时候，是否将两个实例合并为一个实例运行
                                 True:合并，一个任务只会运行一个实例
                                 False:不合并，一个任务会同时运行多个实例
+    [2020-07-27]
+    replace_existing:
+    如果在程序(这里指scheduler)初始化期间，在持久化作业存储中安排作业，
+    必须给作业指定一个显示的ID，并且设置replace_existing=True，
+    否则，每次程序重启的时候，会得到该job的一个新副本
+
     max_instances:      单个job最多可以运行几个实例
     misfire_grace_time: 任务因不可抗力在规定时间点没有执行时，允许自动补偿执行的宽限期
                             假设该值为1800s（0.5h）,任务将在9:00 运行，结果 8:55 ~ 9:10调度程序挂了，
@@ -67,9 +73,10 @@ class BaseConfig:
                             简称：虽迟但执
     """
     SCHEDULER_JOB_DEFAULTS = {
-        "coalesce": True,
-        "max_instances": 1,
-        "misfire_grace_time": 1800,
+        "coalesce": False,
+        "replace_existing": True,
+        "max_instances": 3,
+        "misfire_grace_time": 1800
     }
 
     #

@@ -388,6 +388,7 @@ class FileHandler:
         """判断目录(/文件夹)是否为空"""
         return len(listdir(path)) == 0
 
-    def exists(self, path: str) -> bool:
+    @staticmethod
+    def exists(path: str) -> bool:
         """文件或者目录是否存在"""
         return exists(path)

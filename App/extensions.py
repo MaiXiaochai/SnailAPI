@@ -20,7 +20,7 @@ from .setting import EVENT_MSG
 # Migrate 作用是将models的结构修改映射到数据库中
 
 db = SQLAlchemy()
-# 生产环境不要使用迁移
+# 生产环境时，不要使用迁移
 migrate = Migrate()
 scheduler = APScheduler()
 
