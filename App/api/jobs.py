@@ -172,10 +172,6 @@ class JobsResource(Resource):
 
     def post(self, job_name):
         """
-        TODO: [2020-06-12]
-        改为 job_type 为 script 时，job_cmd 为空时，自动根据 file 上传脚本生成 job_cmd 内容，
-        同时，也支持 job_cmd 输入命令， 检测命令中含有的脚本名称。
-        更改涉及到 JobData/RunningLog 等表，get/post/put逻辑
         添加一个任务
         """
         job_args = parser_jobs.parse_args()
@@ -553,7 +549,7 @@ class JobsResource(Resource):
 
                 # =========================[ 一个文件夹内执行某个脚本 ]=========================
                 elif old_job_type == JOB_TYPE_DIR:
-                    # TODO: 支持文件夹上传和更新
+                    # 不支持文件夹上传
                     raise ValueError(f"'jobType'为'{JOB_TYPE_DIR}'类型的命令暂时不支持")
 
                 # ========================[ 组装 job 参数, start ]=========================

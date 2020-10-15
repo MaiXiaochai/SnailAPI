@@ -13,6 +13,7 @@ from math import log
 from flask_apscheduler import APScheduler
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 
 from .setting import EVENT_MSG
 
@@ -20,9 +21,13 @@ from .setting import EVENT_MSG
 # Migrate 作用是将models的结构修改映射到数据库中
 
 db = SQLAlchemy()
+
 # 生产环境时，不要使用迁移
 migrate = Migrate()
 scheduler = APScheduler()
+
+# cors, 用于解决跨域问题
+cors = CORS()
 
 
 def event_listener(event):
@@ -41,6 +46,7 @@ def event_listener(event):
 
 def init_ext(app):
     db.init_app(app)
+    cors.init_app(app)
     scheduler.init_app(app)
     migrate.init_app(app, db)
 

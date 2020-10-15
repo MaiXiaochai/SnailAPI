@@ -37,6 +37,7 @@ class BaseConfig:
 
     # ================[ 上传文件设置 ]================
     BASE_DIR = dirname(dirname(dirname(abspath(__file__))))
+    # 上传的文件所在的文件夹名称
     DIR_NAME = "scripts"
     UPLOAD_DIR = join(BASE_DIR, DIR_NAME)
 

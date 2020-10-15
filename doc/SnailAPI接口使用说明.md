@@ -105,7 +105,7 @@
       
         +  `timeStyle`:` cron|interval|date`(目前只支持`cron`，可以满足`99%`的需求)
         + `cateogry`: ` mes|erp|warranty|radar|pms|stopcard|...`（所属业务）
-        + `jobType`: `cli|script|proc`(目前只支持`cli`)
+        + `jobType`: `cli|script|proc`(目前支持`cli`,`script`)
         
         ```shell
         $ curl -X POST http://localhost:5000/api/jobs/{job_name}
@@ -114,7 +114,7 @@
                 "jobType": "cli",
                 "jobCmd": "echo %cd%",
                 "timeStyle": "cron",
-                "timeData": "*/1 * * * *",
+                "timeData": "*/5 * * * *",
                 "createdBy": "zhang",
                 "category": "mes",
                 "desc": "打印执行时的路径"
@@ -131,7 +131,7 @@
         }
       ```
     
-  + **2.1.2 修改n(n≥1)个任务的状态**
+  + **2.1.2 手动操作任务n(n≥1)个任务的状态**
 
     + 这里的`暂停`和`恢复`作用的对象是从此刻起，以后的执行计划。
 
