@@ -88,13 +88,14 @@ posts_fields = {
 
 job_fields = {
     "jobName": String(attribute="job_name"),
-    "job_type": String(attribute="job_type"),
+    "jobType": String(attribute="job_type"),
     "jobCmd": String(attribute="job_cmd"),
-    "nextRunTime": DateTime(attribute="next_run_time", dt_format="iso8601"),
     "timeStyle": String(attribute="time_style"),
+    "timeData": String(attribute="time_data"),
+    "nextRunTime": DateTime(attribute="next_run_time", dt_format="iso8601"),
     "category": String(attribute="category"),
     "file": String(attribute="file_name", default=""),
-    "desc": String(attribute="desc"),
+    "comment": String(attribute="desc"),
 }
 
 jobs_fields = {

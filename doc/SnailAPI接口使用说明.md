@@ -206,19 +206,23 @@
           "data": [
               {
                   "jobName": "snail_job1",
-                  "job_type": "cli",
+                  "jobType": "cli",
                   "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Flask ]",
                   "nextRunTime": "2020-06-02T23:27:00+08:00",
                   "timeStyle": "cron",
-                  "timeData": "*/1 * * * *"
+                  "timeData": "*/1 * * * *",
+                  "category": "snail",
+                  "comment": "snail 测试demo"
               },
               {
                   "jobName": "snail_job",
-                  "job_type": "cli",
+                  "jobType": "cli",
                   "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Python ]",
                   "nextRunTime": "2020-06-02T23:27:00+08:00",
                   "timeStyle": "cron",
-                  "timeData": "*/1 * * * *"
+                  "timeData": "*/1 * * * *",
+                  "category": "snail",
+                  "comment": "snail 测试demo"
               }
           ]
       }
@@ -234,7 +238,7 @@
       ```
       
     + `response`
-    
+
         ```json
     // 因为只有两个任务， 这里只有两条数据
         {
@@ -248,7 +252,9 @@
                     "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Flask ]",
                     "nextRunTime": "2020-06-02T23:27:00+08:00",
                     "timeStyle": "cron",
-                    "timeData": "*/1 * * * *"
+                    "timeData": "*/1 * * * *",
+                    "category": "snail",
+                    "comment": "snail 测试demo"
                 },
                 {
                     "jobName": "snail_job",
@@ -256,7 +262,9 @@
                     "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Python ]",
                     "nextRunTime": "2020-06-02T23:27:00+08:00",
                     "timeStyle": "cron",
-                    "timeData": "*/1 * * * *"
+                    "timeData": "*/1 * * * *",
+                    "category": "snail",
+                    "comment": "snail 测试demo"
                 }
             ]
         }
