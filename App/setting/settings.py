@@ -75,9 +75,9 @@ class BaseConfig:
                             简称：虽迟但执
     """
     SCHEDULER_JOB_DEFAULTS = {
-        "coalesce": False,
+        "coalesce": True,
         "replace_existing": True,
-        "max_instances": 3,
+        "max_instances": 1,
         "misfire_grace_time": 1800
     }
 
@@ -106,6 +106,7 @@ class BaseConfig:
     CACHE_DEFAULT_TIMEOUT = 60 * 60 * 24 * 30
 
 
+# ===================[ 环境配置 ]===================
 class DevelopBaseConfig(BaseConfig):
     """
     开发环境配置
@@ -176,6 +177,7 @@ envs = {
 
 if __name__ == "__main__":
     bc = BaseConfig()
+    # 上传脚本目录
     # E:\Code\github\SnailAPI\App\scripts
     res = bc.UPLOAD_DIR
     print(res)
