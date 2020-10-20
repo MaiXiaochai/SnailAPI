@@ -52,8 +52,8 @@ class BaseConfig:
         'default': SQLAlchemyJobStore(url=get_db_uri(db_info))
     }
     SCHEDULER_EXECUTORS = {
-        'default': ThreadPoolExecutor(50),
-        'processpool': ProcessPoolExecutor(max_workers=8),
+        'default': ThreadPoolExecutor(100),
+        'processpool': ProcessPoolExecutor(max_workers=50),
     }
     """
     coalesce:           是否允许job实例合并
