@@ -172,7 +172,7 @@
       
         + `"action": "update"`为必须字段和值
         + 修改时间信息时，`timeStyle`和`timeData`必须同时出现且有值
-        + 可修改的字段为 `timeStyle`, `timeData`,`crea`, `cateogry`,`desc` 
+        + 可修改的字段为 `timeStyle`, `timeData`,`createdBy`, `cateogry`,`desc` 
         + 修改部分字段，只需要将值写入`json`内，并赋值即可，只有字段，值为空的字段不会被修改。
         
         ```shell
@@ -212,7 +212,8 @@
                   "timeStyle": "cron",
                   "timeData": "*/1 * * * *",
                   "category": "snail",
-                  "comment": "snail 测试demo"
+                  "comment": "snail 测试demo",
+                  "file":""
               },
               {
                   "jobName": "snail_job",
@@ -222,7 +223,8 @@
                   "timeStyle": "cron",
                   "timeData": "*/1 * * * *",
                   "category": "snail",
-                  "comment": "snail 测试demo"
+                  "comment": "snail 测试demo",
+                  "file":""
               }
           ]
       }
@@ -248,7 +250,7 @@
             "data": [
                 {
                     "jobName": "snail_job1",
-                    "job_type": "cli",
+                    "jobType": "cli",
                     "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Flask ]",
                     "nextRunTime": "2020-06-02T23:27:00+08:00",
                     "timeStyle": "cron",
@@ -258,7 +260,7 @@
                 },
                 {
                     "jobName": "snail_job",
-                    "job_type": "cli",
+                    "jobType": "cli",
                     "jobCmd": "echo [SnailAPI][%date%%time%][ Hello Python ]",
                     "nextRunTime": "2020-06-02T23:27:00+08:00",
                     "timeStyle": "cron",
