@@ -77,14 +77,7 @@ class OracleUtils:
 
 
 def worker(config: dict, args: dict):
-    """
-    username
-    password
-    host
-    port
-    service_name
-    sid
-    """
+    """执行SQL、调用存储过程"""
     oracle = OracleUtils(**config)
 
     # 允许执行sql、调用存储过程(proc)，以及对应的方法
@@ -93,22 +86,35 @@ def worker(config: dict, args: dict):
         'proc': oracle.call_proc
     }
 
-    for key, func in allow_args:
+    # 执行第几次
+    counter = 1
+
+    for key in allow_args:
         content = args.get(key)
+        func = allow_args.get(key)
+
         if content:
             # 执行每一个SQL 或调用每一个proc
             for i in content:
                 # 每个i中可能包含';'，执行时会报错,
                 # 所以，遇到';'则拆成多个子句，执行每一个
                 split_list = i.split(';')
+
                 try:
                     for a_slice in split_list:
+                        # 打印执行内容
+                        info = f"[NO.{counter} | {key}: {a_slice}]"
+                        print(info)
+
                         if a_slice:
                             func(a_slice)
                             oracle.commit()
+                            counter += 1
+
                 except Exception as err:
                     # 这里用print是为了给调度程序捕获输出内容
                     print(str(err))
+
                     # 每个i是一个完整的SQL逻辑，所以，主要i中的一个小SQL出错，整个i就停止执行
                     oracle.rollback()
                     continue
@@ -130,20 +136,23 @@ def main():
     """
 
     oracle_config = {
-        'username': 'demo',
-        'password': 'demo',
-        'host': 'godlikeu.com',
+        'username': 'erp',
+        'password': 'erp1324',
+        'host': '192.168.158.219',
         'port': 1521,
-        'service_name': 'god',
+        'service_name': 'bfcecdw',
         'sid': ''
     }
 
     args = {
-        'sql': [],
-        'proc': []
+        'sql': [
+        ]
     }
 
+    file_name = __file__
+    print(f"{file_name} ,start.")
     worker(oracle_config, args)
+    print(f"{file_name} ,end.")
 
 
 if __name__ == '__main__':
