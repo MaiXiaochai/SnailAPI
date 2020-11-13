@@ -116,6 +116,7 @@ def worker(config: dict, args: dict):
 
 def main():
     """
+    =============================[ 说明 ]================================
     oracle_cfg:
         连接Oracle的配置信息sid和service_name使用其中一个即可
 
@@ -125,6 +126,7 @@ def main():
             args = {
             'sql': ['truncate table A; insert into A select * from B;']
             }
+    ====================================================================
     """
 
     oracle_config = {
