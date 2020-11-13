@@ -13,6 +13,7 @@ psycopg2 = "*"
 flask-script = "*"
 
 [packages]
+cx-oracle = "*"
 
 [requires]
 python_version = "3.8"
